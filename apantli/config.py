@@ -6,6 +6,7 @@ import warnings
 from typing import Dict, Optional, Any
 from pydantic import BaseModel, Field, field_validator, ValidationError
 import yaml
+from jinja2 import Environment
 
 
 # Default configuration
@@ -109,21 +110,49 @@ class Config:
     self.models: Dict[str, ModelConfig] = {}
     self.reload()
 
+  def _render_template(self) -> str:
+    """Render the config file as a Jinja2 template.
+
+    Returns the rendered YAML content as a string.
+    """
+    try:
+      # Read the raw config file
+      with open(self.config_path, 'r') as f:
+        template_content = f.read()
+
+      # Create a Jinja2 environment to render the template
+      env = Environment()
+      template = env.from_string(template_content)
+
+      # Render the template with no additional context
+      # (variables are defined within the template itself using {% set %})
+      rendered = template.render()
+
+      return rendered
+
+    except Exception as exc:
+      logging.warning(f"Failed to render config template: {exc}")
+      raise
+
   def reload(self):
     """Load or reload configuration from file."""
     try:
-      with open(self.config_path, 'r') as f:
-        config_data = yaml.safe_load(f)
+      # Render the config file as a Jinja2 template first
+      rendered_config = self._render_template()
+
+      # Parse the rendered YAML
+      config_data = yaml.safe_load(rendered_config)
 
       # Validate and load models
       models = {}
       errors = []
 
       for model_dict in config_data.get('model_list', []):
+        # Extract model_name from top level
+        model_name = model_dict.get('model_name', 'unknown')
+        
         try:
-          # Extract model_name from top level
-          model_name = model_dict.get('model_name')
-          if not model_name:
+          if not model_dict.get('model_name'):
             errors.append("Model entry missing 'model_name' field")
             continue
 

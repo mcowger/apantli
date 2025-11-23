@@ -27,6 +27,7 @@ dependencies = [
     "netifaces",
     "tenacity",
     "aiosqlite",
+    "jinja2",
 ]
 
 [project.optional-dependencies]

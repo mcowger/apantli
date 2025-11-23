@@ -324,3 +324,86 @@ def test_model_config_extra_fields_allowed(monkeypatch):
   params = config.to_litellm_params()
   assert params.get('custom_param') == 'custom_value'
   assert params.get('another_param') == 42
+
+
+def test_config_jinja2_templating(temp_config_file, monkeypatch):
+  """Test that config file supports Jinja2 templating."""
+  monkeypatch.setenv('OPENAI_API_KEY', 'sk-test')
+
+  # Write config with Jinja2 templating
+  config_content = """{% set prefix = "myprovider" %}
+{% set timeout_val = 180 %}
+
+model_list:
+  - model_name: {{ prefix }}/gpt-5.1
+    litellm_params:
+      model: openai/gpt-5.1
+      api_key: os.environ/OPENAI_API_KEY
+      timeout: {{ timeout_val }}
+"""
+  with open(temp_config_file, 'w') as f:
+    f.write(config_content)
+
+  config = Config(temp_config_file)
+
+  # Verify template was rendered correctly
+  assert 'myprovider/gpt-5.1' in config.models
+  model = config.models['myprovider/gpt-5.1']
+  assert model.litellm_model == 'openai/gpt-5.1'
+  assert model.timeout == 180
+
+
+def test_config_jinja2_templating_with_loops(temp_config_file, monkeypatch):
+  """Test that config file supports Jinja2 loops."""
+  monkeypatch.setenv('TEST_API_KEY', 'sk-test')
+
+  # Write config with Jinja2 loops
+  config_content = """{% set models_list = ['gpt-4', 'gpt-3.5'] %}
+
+model_list:
+{% for model in models_list %}
+  - model_name: custom/{{ model }}
+    litellm_params:
+      model: openai/{{ model }}
+      api_key: os.environ/TEST_API_KEY
+{% endfor %}
+"""
+  with open(temp_config_file, 'w') as f:
+    f.write(config_content)
+
+  config = Config(temp_config_file)
+
+  # Verify template was rendered correctly
+  assert 'custom/gpt-4' in config.models
+  assert 'custom/gpt-3.5' in config.models
+  assert config.models['custom/gpt-4'].litellm_model == 'openai/gpt-4'
+  assert config.models['custom/gpt-3.5'].litellm_model == 'openai/gpt-3.5'
+
+
+def test_config_jinja2_templating_mixed_content(temp_config_file, monkeypatch):
+  """Test that normal YAML still works with Jinja2 templating."""
+  monkeypatch.setenv('KEY1', 'sk-test-1')
+  monkeypatch.setenv('KEY2', 'sk-test-2')
+
+  # Write config with both static and templated content
+  config_content = """{% set prefix = "ai" %}
+
+model_list:
+  - model_name: static-model
+    litellm_params:
+      model: openai/gpt-4
+      api_key: os.environ/KEY1
+  - model_name: {{ prefix }}-model
+    litellm_params:
+      model: anthropic/claude-3
+      api_key: os.environ/KEY2
+"""
+  with open(temp_config_file, 'w') as f:
+    f.write(config_content)
+
+  config = Config(temp_config_file)
+
+  # Verify both static and templated models were loaded
+  assert 'static-model' in config.models
+  assert 'ai-model' in config.models
+  assert len(config.models) == 2
