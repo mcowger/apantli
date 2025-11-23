@@ -5,6 +5,7 @@ Security considerations and best practices for running Apantli.
 ## Table of Contents
 
 - [Security Model](#security-model)
+- [API Token Authentication](#api-token-authentication)
 - [Network Exposure](#network-exposure)
 - [API Key Management](#api-key-management)
 - [Database Security](#database-security)
@@ -14,7 +15,7 @@ Security considerations and best practices for running Apantli.
 
 ## Security Model
 
-**Apantli provides NO authentication or authorization by default.**
+**By default, Apantli provides NO authentication or authorization.**
 
 It is designed for:
 - ✅ Local development on a single-user machine
@@ -25,6 +26,105 @@ It is NOT designed for:
 - ❌ Public internet exposure without additional security
 - ❌ Multi-user environments without authentication
 - ❌ Untrusted networks
+
+**Optional API Token Authentication**: Apantli includes ultra-basic API token authentication that can be enabled via the `API_TOKEN_REQUIRED` environment variable. This provides a simple barrier against casual access but should not be considered sufficient for production environments handling sensitive data. See [API Token Authentication](#api-token-authentication) for details.
+
+## API Token Authentication
+
+### Enabling API Token Authentication
+
+API token authentication is optional and disabled by default. Enable it by setting the `API_TOKEN_REQUIRED` environment variable:
+
+```bash
+# Add to .env
+API_TOKEN_REQUIRED=your-secret-token-here
+```
+
+Once enabled, all API requests must include a valid Bearer token in the Authorization header.
+
+### Using Authenticated Requests
+
+When API token authentication is enabled, include the Bearer token in request headers:
+
+**Using curl**:
+
+```bash
+curl http://localhost:4000/v1/chat/completions \
+  -H "Authorization: Bearer your-secret-token-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4.1-mini",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+**Using Python OpenAI SDK**:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:4000/v1",
+    api_key="",  # Not used for Apantli, but required by SDK
+    default_headers={
+        "Authorization": "Bearer your-secret-token-here"
+    }
+)
+
+response = client.chat.completions.create(
+    model="gpt-4.1-mini",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+**Using curl with environment variable**:
+
+```bash
+# Set token as environment variable
+export APANTLI_TOKEN="your-secret-token-here"
+
+# Use in requests
+curl http://localhost:4000/v1/chat/completions \
+  -H "Authorization: Bearer $APANTLI_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4.1-mini", "messages": [{"role": "user", "content": "Hello!"}]}'
+```
+
+### Protected Endpoints
+
+When `API_TOKEN_REQUIRED` is set, the following endpoints require Bearer token authentication:
+
+- `/v1/chat/completions` (POST)
+- `/chat/completions` (POST)
+- `/models` (GET)
+
+The following endpoints remain unprotected:
+- `/health` (GET)
+- `/` (Dashboard)
+- `/compare` (Playground)
+
+### Important Limitations
+
+API token authentication in Apantli is **ultra-basic** security for convenience:
+
+- ✅ Provides a simple barrier against casual access
+- ✅ Works for protecting localhost sharing across trusted networks
+- ✅ Easy to enable and use
+
+- ❌ Tokens are sent in plain HTTP headers (use HTTPS if on public networks)
+- ❌ No rate limiting built in
+- ❌ No user isolation or per-user tracking
+- ❌ Single shared token (not per-user)
+- ❌ Not suitable for multi-user or production environments
+
+**For production environments**, combine API token authentication with:
+- HTTPS/TLS encryption
+- Reverse proxy with rate limiting
+- Network firewall rules
+- VPN or SSH tunneling
+- Comprehensive monitoring and logging
+
+See [Production Deployment](#production-deployment) for recommendations.
 
 ## Network Exposure
 
@@ -56,7 +156,15 @@ This ensures only processes on your machine can access the server.
 
 If you must bind to `0.0.0.0` (for example, to access from other devices on your local network):
 
-1. **Use a firewall** to restrict access:
+1. **Enable API token authentication** (see [API Token Authentication](#api-token-authentication)):
+
+   ```bash
+   # Set API_TOKEN_REQUIRED in .env
+   API_TOKEN_REQUIRED=your-secret-token-here
+   apantli
+   ```
+
+2. **Use a firewall** to restrict access:
 
    ```bash
    # macOS
@@ -68,7 +176,7 @@ If you must bind to `0.0.0.0` (for example, to access from other devices on your
    sudo ufw allow from 192.168.1.0/24 to any port 4000  # Allow local network only
    ```
 
-2. **Use SSH tunneling** to access remotely:
+3. **Use SSH tunneling** to access remotely:
 
    ```bash
    # On remote machine
@@ -77,7 +185,7 @@ If you must bind to `0.0.0.0` (for example, to access from other devices on your
    # Then access http://localhost:4000 in browser
    ```
 
-3. **Use a reverse proxy** with authentication (see [Production Deployment](#production-deployment))
+4. **Use a reverse proxy** with authentication (see [Production Deployment](#production-deployment))
 
 ## API Key Management
 
@@ -300,13 +408,13 @@ CMD ["python", "-m", "apantli.server", "--host", "0.0.0.0", "--port", "4000"]
 
 - [ ] `.env` file has mode 600 permissions
 - [ ] `.env` is in `.gitignore`
-- [ ] Server binds to `127.0.0.1` (localhost only)
+- [ ] Server binds to `127.0.0.1` (localhost only) or API token enabled
 - [ ] Database file has mode 600 permissions
 - [ ] Using separate API keys (not production keys)
 
 ### Production
 
-- [ ] Authentication implemented (reverse proxy, API keys, or both)
+- [ ] API token authentication enabled OR reverse proxy authentication configured
 - [ ] HTTPS/TLS enabled
 - [ ] Firewall configured to restrict access
 - [ ] Database encrypted at rest (volume encryption)
@@ -326,9 +434,9 @@ CMD ["python", "-m", "apantli.server", "--host", "0.0.0.0", "--port", "4000"]
 
 ## Known Security Limitations
 
-### No Built-in Authentication
+### No Built-in Rate Limiting
 
-Apantli does not include authentication or authorization. You must implement this yourself or use a reverse proxy.
+Apantli does not implement rate limiting. Anyone with access can make unlimited requests.
 
 **Mitigation**: See [Production Deployment](#production-deployment) for options.
 
@@ -341,16 +449,6 @@ Full request JSON (including API keys) is stored in the database for debugging.
 - Protect database file with 600 permissions
 - Implement data retention to delete old requests
 - Consider forking and modifying to redact keys
-
-### No Rate Limiting
-
-Apantli does not implement rate limiting. Anyone with access can make unlimited requests.
-
-**Mitigation**:
-- Bind to localhost only (`--host 127.0.0.1`)
-- Use firewall rules to restrict access
-- Implement reverse proxy with rate limiting
-- Monitor provider API usage
 
 ### SQLite Limitations
 
@@ -369,6 +467,24 @@ The dashboard displays user-supplied content (request/response JSON). While `esc
 - Dashboard is meant for trusted users only
 - Always bind to localhost for personal use
 - Use authentication if exposing to network
+- Enable API token authentication for network sharing
+
+### API Token - Basic Security Only
+
+The API token authentication is ultra-basic and suitable only for protecting against casual access on trusted networks.
+
+**Limitations**:
+- Tokens sent in plain HTTP headers (use HTTPS on public networks)
+- Single shared token (no per-user isolation)
+- No automatic token rotation
+- No token expiration or revocation mechanism
+
+**Mitigation**:
+- Use only on trusted networks or with HTTPS
+- Combine with reverse proxy for production use
+- Rotate tokens regularly
+- Use strong, random tokens (32+ characters)
+- Implement proper access control in production
 
 ## Reporting Security Issues
 
@@ -392,4 +508,4 @@ We will respond within 48 hours and work with you to address the issue.
 
 ---
 
-**Remember**: Apantli is designed for local, single-user use. If you need multi-user support or network exposure, implement proper authentication, authorization, and encryption before deployment.
+**Remember**: Apantli is designed for local, single-user use. API token authentication provides ultra-basic security suitable for trusted networks only. If you need multi-user support, public network exposure, or production deployment, implement proper authentication, authorization, encryption, and rate limiting before deployment.

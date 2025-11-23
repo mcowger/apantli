@@ -36,6 +36,7 @@ import uvicorn
 from dotenv import load_dotenv
 
 # Import from local modules
+from apantli.auth import authenticated_route
 from apantli.config import LOG_INDENT, Config
 from apantli.database import Database, RequestFilter
 from apantli.errors import build_error_response, get_error_details, extract_error_message
@@ -202,7 +203,7 @@ def filter_parameters_for_model(request_data: dict) -> dict:
 def calculate_cost(response) -> float:
     """Calculate cost for a completion response, returning 0.0 on error."""
     try:
-        return litellm.completion_cost(completion_response=response)
+        return litellm.completion_cost(completion_response=response) # pyright: ignore[reportPrivateImportUsage]
     except Exception as e:
         logging.debug(f"Failed to calculate cost: {e}")
         return 0.0
@@ -418,6 +419,7 @@ async def handle_llm_error(e: Exception, start_time: float, request_data: dict,
 
 @app.post("/v1/chat/completions")
 @app.post("/chat/completions")
+@authenticated_route
 async def chat_completions(request: Request):
     """OpenAI-compatible chat completions endpoint."""
     db = request.app.state.db
@@ -463,20 +465,20 @@ async def chat_completions(request: Request):
     except HTTPException as exc:
         # Model not found - log and return error
         duration_ms = int((time.time() - start_time) * 1000)
-        await db.log_request(model, "unknown", None, duration_ms, request_data, error=f"UnknownModel: {exc.detail}")
-        print(f"{LOG_INDENT}✗ LLM Response: {model} (unknown) | {duration_ms}ms | Error: UnknownModel")
+        await db.log_request(model, "unknown", None, duration_ms, request_data, error=f"UnknownModel: {exc.detail}") # pyright: ignore[reportPossiblyUnboundVariable]
+        print(f"{LOG_INDENT}✗ LLM Response: {model} (unknown) | {duration_ms}ms | Error: UnknownModel") # pyright: ignore[reportPossiblyUnboundVariable]
         error_response = build_error_response("invalid_request_error", exc.detail, "model_not_found")
         return JSONResponse(content=error_response, status_code=exc.status_code)
 
     except (RateLimitError, AuthenticationError, PermissionDeniedError, NotFoundError,
             Timeout, InternalServerError, ServiceUnavailableError, APIConnectionError,
             BadRequestError) as exc:
-        return await handle_llm_error(exc, start_time, request_data, request_data_for_logging, db)
+        return await handle_llm_error(exc, start_time, request_data, request_data_for_logging, db) # pyright: ignore[reportPossiblyUnboundVariable]
 
     except Exception as exc:
         # Catch-all for unexpected errors
         logging.exception(f"Unexpected error in chat completions: {exc}")
-        return await handle_llm_error(exc, start_time, request_data, request_data_for_logging, db)
+        return await handle_llm_error(exc, start_time, request_data, request_data_for_logging, db) # pyright: ignore[reportPossiblyUnboundVariable]
 
 
 @app.get("/health")
@@ -485,7 +487,9 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/v1/models")
 @app.get("/models")
+@authenticated_route
 async def models(request: Request):
     """List available models from config."""
     model_list = []
@@ -782,7 +786,7 @@ def main():
     # Suppress LiteLLM's verbose logging and feedback messages
     os.environ['LITELLM_LOG'] = 'ERROR'
     litellm.suppress_debug_info = True
-    litellm.set_verbose = False
+    litellm.set_verbose = False # pyright: ignore[reportPrivateImportUsage]
 
     # Store config values in app.state for lifespan to access
     app.state.config_path = args.config
@@ -791,7 +795,7 @@ def main():
     app.state.retries = args.retries
 
     # Configure logging format with timestamps
-    log_config = uvicorn.config.LOGGING_CONFIG
+    log_config = uvicorn.config.LOGGING_CONFIG # pyright: ignore[reportAttributeAccessIssue]
     # Update default formatter (for startup/info logs)
     log_config["formatters"]["default"]["fmt"] = '%(asctime)s %(levelprefix)s %(message)s'
     log_config["formatters"]["default"]["datefmt"] = '%Y-%m-%d %H:%M:%S'

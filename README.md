@@ -63,12 +63,13 @@ Apantli is a local proxy server that routes LLM requests to multiple providers w
 - **Interactive Playground** - Side-by-side model comparison with parallel streaming
 - **Web Dashboard** - Real-time monitoring with cost tracking and request history
 - **SQLite Storage** - Full request/response logging with automatic cost calculation
+- **Optional API Token Authentication** - Ultra-basic security for network sharing
 
 **Why Apantli?** Lighter alternative to LiteLLM's proxy (which requires Postgres and Docker). Runs entirely locally with no cloud dependencies. The Playground makes it easy to compare model outputs, evaluate prompts, and tune parameters across multiple providers simultaneously.
 
 > **⚠️ Security Notice**
 >
-> Apantli is designed for local use only and provides **no authentication or authorization**. Do not expose to the network without adding proper security controls. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#security-considerations) for details.
+> Apantli is designed for local use only. By default, it provides **no authentication**. For network exposure, enable API token authentication or implement additional security controls. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#security-considerations) and [SECURITY.md](SECURITY.md) for details.
 
 ## Usage
 
@@ -88,6 +89,32 @@ apantli --config custom.yaml  # Custom config file
 # Combined options
 apantli --port 8080 --timeout 60 --retries 5
 ```
+
+#### Optional API Token Authentication
+
+For basic security when sharing across a network, enable API token authentication:
+
+```bash
+# Set an API token in .env
+echo "API_TOKEN_REQUIRED=your-secret-token-here" >> .env
+
+# Start server (now requires Bearer token authentication)
+apantli
+```
+
+Clients must include the token in requests:
+
+```bash
+curl http://localhost:4000/v1/chat/completions \
+  -H "Authorization: Bearer your-secret-token-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4.1-mini",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+See [SECURITY.md](SECURITY.md#api-token-authentication) for more details.
 
 ### Making Requests
 
@@ -166,6 +193,7 @@ See [docs/API.md](docs/API.md) for complete endpoint documentation.
 | OpenAI compatible | Drop-in replacement for OpenAI API clients with streaming support |
 | Error handling | Configurable timeouts, automatic retries, and OpenAI-compatible error responses |
 | CORS enabled | Works with web-based clients like Obsidian Copilot |
+| Optional API token | Ultra-basic authentication for network sharing (no token required by default) |
 
 ## System Architecture
 
@@ -182,6 +210,11 @@ Apantli uses a modular architecture with six focused modules:
 │  ┌────────────────────────────────────┐  │
 │  │ Server (server.py)                 │  │
 │  │ - Routes & request orchestration   │  │
+│  └────────────┬───────────────────────┘  │
+│               ↓                          │
+│  ┌────────────────────────────────────┐  │
+│  │ Auth (auth.py)                     │  │
+│  │ - Optional API token verification  │  │
 │  └────────────┬───────────────────────┘  │
 │               ↓                          │
 │  ┌────────────────────────────────────┐  │
@@ -253,6 +286,9 @@ See [launchd/README.md](launchd/README.md) for complete setup, configuration, an
 ```bash
 OPENAI_API_KEY=sk-proj-your-key-here
 ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
+
+# Optional: Enable API token authentication
+API_TOKEN_REQUIRED=your-secret-token-here
 ```
 
 Never commit `.env` to version control (already in `.gitignore`).
@@ -364,7 +400,7 @@ For `llm` CLI integration, see [Utilities](#utilities) section above.
 
 **Default configuration is for local use only.** Do not expose to network without authentication.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#security-considerations) for security details.
+Apantli includes optional API token authentication for ultra-basic security. See [SECURITY.md](SECURITY.md) for detailed security information and best practices.
 
 ## Further Reading
 
@@ -382,6 +418,7 @@ For detailed documentation on specific topics:
 | [docs/PLAYGROUND.md](docs/PLAYGROUND.md) | Interactive model comparison interface architecture and usage | Users & Developers |
 | [docs/TESTING.md](docs/TESTING.md) | Test suite, manual testing procedures, and validation | Developers & QA |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and solutions | Users & Developers |
+| [SECURITY.md](SECURITY.md) | Security considerations, authentication, and best practices | Users & DevOps |
 
 ## License
 
@@ -392,4 +429,3 @@ Apache License 2.0 - see [LICENSE](LICENSE) file for details.
 "Apantli" (Nahuatl: āpantli) means "canal" or "channel" - a fitting name for a system that channels requests between clients and LLM providers.
 
 <a href="https://aztecglyphs.wired-humanities.org/content/apantli-mdz50r"><img src="./docs/apantli-glyph.png" width="120px"></a>
-
