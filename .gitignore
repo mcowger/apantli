@@ -5,7 +5,6 @@ env-txt.txt
 __pycache__/
 .venv/
 .claude
-uv.lock
 SERVICES.md
 config.yaml
 .pytest_cache
