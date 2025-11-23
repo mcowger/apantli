@@ -1,0 +1,180 @@
+
+{
+  "name": "claude-haiku-4-5",
+  "mode": "chat",
+  "litellm_provider": "anthropic",
+  "max_input_tokens": 200000,
+  "max_output_tokens": 64000,
+  "input_cost_per_token": 0.000001,
+  "output_cost_per_token": 0.000005,
+  "cache_creation_input_token_cost": 0.00000125,
+  "cache_read_input_token_cost": 1e-7,
+  "cache_creation_input_token_cost_above_1hr": 0.000002,
+  "max_tokens": 64000,
+  "supports_assistant_prefill": true,
+  "supports_function_calling": true,
+  "supports_computer_use": true,
+  "supports_pdf_input": true,
+  "supports_prompt_caching": true,
+  "supports_reasoning": true,
+  "supports_response_schema": true,
+  "supports_tool_choice": true,
+  "supports_vision": true
+}
+
+
+
+✦ Here are the valid options for litellm_params in a config.yaml file, consolidated from CredentialLiteLLMParams, CustomPricingLiteLLMParams,
+  GenericLiteLLMParams, and LiteLLM_Params definitions:
+
+  Required:
+
+   * model: string (The specific LLM model to use, e.g.,
+"gpt-4",
+"claude-2")
+
+  Optional:
+
+   * api_key: string (Your API key for the LLM provider)
+   * api_base: string (The base URL for the LLM API endpoint)
+   * api_version: string (The API version for the LLM provider, e.g., for Azure OpenAI)
+   * vertex_project: string (For Google Vertex AI: your GCP project ID)
+   * vertex_location: string (For Google Vertex AI: your GCP project location/region)
+   * vertex_credentials: string or dict (For Google Vertex AI: your GCP credentials, can be a path to a JSON key file or the JSON content itself)
+   * region_name: string (A unified field for specifying the region across different providers)
+   * aws_access_key_id: string (For AWS Bedrock/Sagemaker: your AWS access key ID)
+   * aws_secret_access_key: string (For AWS Bedrock/Sagemaker: your AWS secret access key)
+   * aws_region_name: string (For AWS Bedrock/Sagemaker: your AWS region)
+   * watsonx_region_name: string (For IBM WatsonX: your region)
+   * input_cost_per_token: float (Custom pricing: cost per input token)
+   * output_cost_per_token: float (Custom pricing: cost per output token)
+   * input_cost_per_second: float (Custom pricing: cost per second of input)
+   * output_cost_per_second: float (Custom pricing: cost per second of output)
+   * custom_llm_provider: string (Specify a custom LLM provider if not natively supported)
+   * tpm: integer (Tokens Per Minute limit for the model)
+   * rpm: integer (Requests Per Minute limit for the model)
+   * timeout: float, string, or httpx.Timeout (Timeout for the LLM call in seconds. Can be an environment variable reference like "os.environ/MY_TIMEOUT_VAR")
+   * stream_timeout: float or string (Timeout for streaming LLM calls. Can be an environment variable reference)
+   * max_retries: integer (Maximum number of retries for failed LLM calls)
+   * organization: string (For OpenAI compatible APIs: the organization ID)
+   * configurable_clientside_auth_params: list of strings or dicts (Parameters for client-side authentication configuration)
+   * litellm_credential_name: string (Name of a stored credential set to use)
+   * litellm_trace_id: string (A trace ID for logging/observability)
+   * max_file_size_mb: float (Maximum allowed file size in MB for file uploads, e.g., for OpenAI Whisper)
+   * max_budget: float (Maximum budget in USD for this deployment)
+   * budget_duration: string (Duration for budget reset, e.g.,
+"24h",
+"7d",
+"30d")
+   * use_in_pass_through: boolean (If True, allows this deployment to be used in pass-through endpoints)
+   * use_litellm_proxy: boolean (If True, forces the use of the LiteLLM proxy for this call)
+   * merge_reasoning_content_in_choices: boolean (If True, merges reasoning content into choices for some models)
+   * model_info: dict (Additional information about the model, e.g., context window, pricing tiers)
+   * mock_response: string, ModelResponse, or Exception (For testing: a mock response to return)
+   * auto_router_config_path: string (Path to an auto-router configuration file)
+   * auto_router_config: string (Inlined auto-router configuration as a string)
+   * auto_router_default_model: string (The default model to use for auto-routing)
+   * auto_router_embedding_model: string (The embedding model to use for auto-routing)
+   * s3_bucket_name: string (For batch/file APIs: S3 bucket name)
+   * s3_encryption_key_id: string (For batch/file APIs: S3 encryption key ID)
+   * gcs_bucket_name: string (For batch/file APIs: Google Cloud Storage bucket name)
+   * vector_store_id: string (For vector store operations: the ID of the vector store)
+   * milvus_text_field: string (For Milvus vector stores: the name of the text field)
+
+ model_info Dictionary Options:
+
+  Core Information:
+
+   * id: string (A unique identifier for the model deployment)
+   * base_model: string (The underlying base model for cost tracking, e.g., azure/gpt-3.5-turbo)
+   * litellm_provider: string (The provider for the model, e.g., anthropic, openai)
+   * mode: string (The mode of operation, e.g., chat, embedding, image_generation)
+   * db_model: boolean (Internal flag for the proxy)
+   * tier: string (e.g., free, paid)
+   * created_at, updated_at: datetime (Timestamps for tracking)
+   * created_by, updated_by: string (User identifiers for tracking)
+   * team_id, team_public_model_name: string (For team-specific models)
+
+  Token Limits:
+
+   * max_tokens: integer (Maximum tokens for the model)
+   * max_input_tokens: integer (Maximum input tokens)
+   * max_output_tokens: integer (Maximum output tokens)
+
+  Cost and Pricing:
+
+   * input_cost_per_token: float
+   * output_cost_per_token: float
+   * input_cost_per_second: float
+   * output_cost_per_second: float
+   * input_cost_per_character: float
+   * output_cost_per_character: float
+   * input_cost_per_image: float
+   * output_cost_per_image: float
+   * input_cost_per_audio_token: float
+   * output_cost_per_audio_token: float
+   * input_cost_per_audio_per_second: float
+   * output_cost_per_audio_per_second: float
+   * input_cost_per_video_per_second: float
+   * output_cost_per_video_per_second: float
+   * input_cost_per_query: float (For rerank models)
+   * ocr_cost_per_page: float (For OCR models)
+   * annotation_cost_per_page: float (For OCR models)
+
+  Provider/Model Capabilities (`supports_*` flags):
+
+  These booleans indicate the features supported by the model.
+
+   * supports_vision: boolean
+   * supports_function_calling: boolean
+   * supports_parallel_function_calling: boolean
+   * supports_tool_choice: boolean
+   * supports_response_schema: boolean
+   * supports_system_messages: boolean
+   * supports_assistant_prefill: boolean
+   * supports_prompt_caching: boolean
+   * supports_reasoning: boolean
+   * supports_computer_use: boolean
+   * supports_pdf_input: boolean
+   * supports_audio_input: boolean
+   * supports_audio_output: boolean
+   * supports_embedding_image_input: boolean
+   * supports_native_streaming: boolean
+   * supports_web_search: boolean
+   * supports_url_context: boolean
+
+  Cache-Specific Costs (e.g., for Anthropic):
+
+   * cache_creation_input_token_cost: float
+   * cache_read_input_token_cost: float
+   * cache_creation_input_token_cost_above_1hr: float
+   * cache_creation_input_token_cost_above_200k_tokens: float
+   * cache_read_input_token_cost_above_200k_tokens: float
+
+
+
+
+
+  - model_name: claude-haiku-4.5
+    litellm_params:
+      model: anthropic/claude-haiku-4.5
+      api_key: os.environ/KILOCODE_API_KEY
+      custom_llm_provider: openrouter
+      api_base: {{ kilo_base_url }}
+      headers:
+        {{ kilo_headers | indent(8) }}
+    model_info:
+      input_cost_per_token: 0
+      output_cost_per_token: 0
+
+  - model_name: claude-sonnet-4.5
+    litellm_params:
+      model: anthropic/claude-sonnet-4.5
+      api_key: os.environ/KILOCODE_API_KEY
+      custom_llm_provider: openrouter
+      api_base: {{ kilo_base_url }}
+      headers:
+        {{ kilo_headers | indent(8) }}
+    model_info:
+      input_cost_per_token: 0
+      output_cost_per_token: 0

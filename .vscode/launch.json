@@ -1,0 +1,10 @@
+{
+    "configurations": [
+        {
+            "name": "Apantli",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "apantli/__main__.py"
+        }
+    ]
+}

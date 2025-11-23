@@ -6,6 +6,7 @@ import warnings
 from typing import Dict, Optional, Any
 from pydantic import BaseModel, Field, field_validator, ValidationError
 import yaml
+from uuid import uuid4
 from jinja2 import Environment
 
 
@@ -124,9 +125,7 @@ class Config:
       env = Environment()
       template = env.from_string(template_content)
 
-      # Render the template with no additional context
-      # (variables are defined within the template itself using {% set %})
-      rendered = template.render()
+      rendered = template.render(uuid=uuid4)
 
       return rendered
 
@@ -140,6 +139,7 @@ class Config:
       # Render the config file as a Jinja2 template first
       rendered_config = self._render_template()
 
+      print(rendered_config)
       # Parse the rendered YAML
       config_data = yaml.safe_load(rendered_config)
 

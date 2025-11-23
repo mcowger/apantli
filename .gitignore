@@ -7,3 +7,5 @@ __pycache__/
 .claude
 uv.lock
 SERVICES.md
+config.yaml
+.pytest_cache
