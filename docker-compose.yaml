@@ -1,0 +1,11 @@
+services:
+  apantli:
+    build: .
+    container_name: apantli
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./:/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
