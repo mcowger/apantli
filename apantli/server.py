@@ -43,9 +43,6 @@ from apantli.errors import build_error_response, get_error_details, extract_erro
 from apantli.llm import infer_provider_from_model
 from apantli.utils import convert_local_date_to_utc_range, build_time_filter, build_date_expr, build_hour_expr
 
-# Load environment variables
-load_dotenv()
-
 # Templates
 templates = Jinja2Templates(directory="templates")
 
@@ -780,8 +777,18 @@ def main():
         default=3,
         help="Default number of retry attempts (default: 3)"
     )
+    parser.add_argument(
+        "--env",
+        default=None,
+        help="Path to .env file (default: None, loads from current directory)"
+    )
+
+
+    # Load environment variables from specified .env file
+
 
     args = parser.parse_args()
+    load_dotenv(dotenv_path=args.env)
 
     # Suppress LiteLLM's verbose logging and feedback messages
     os.environ['LITELLM_LOG'] = 'ERROR'
