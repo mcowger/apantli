@@ -486,7 +486,6 @@ async def health():
 
 @app.get("/v1/models")
 @app.get("/models")
-@authenticated_route
 async def models(request: Request):
     """List available models from config."""
     model_list = []
