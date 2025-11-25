@@ -9,6 +9,7 @@ import argparse
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
+from typing import Optional
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -19,7 +20,7 @@ from dotenv import load_dotenv
 from apantli.database import Database
 from apantli.config import LOG_INDENT, Config
 from apantli.errors import build_error_response
-from apantli.stats import stats, stats_daily, stats_date_range, stats_hourly, requests
+from apantli.stats import stats, stats_daily, stats_date_range, stats_hourly, requests, clear_errors
 from apantli.ui import dashboard, compare_page
 from apantli.incoming import chat_completions, health, models, v1_models_info, v1_models_openrouter
 
@@ -73,18 +74,49 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 app.add_route("/ui", dashboard, methods=["GET"])
 app.add_route("/compare", compare_page, methods=["GET"])
 
-app.add_route("/v1/models", v1_models_openrouter, methods=["GET"])
-app.add_route("/v1/model/info", v1_models_info, methods=["GET"])
-app.add_route("/models", models, methods=["GET"])
-app.add_route("/health", health, methods=["GET"])
-app.add_route("/stats", stats, methods=["GET"])
-app.add_route("/errors", stats, methods=["DELETE"])
-app.add_route("/stats/daily", stats_daily, methods=["GET"])
-app.add_route("/stats/hourly", stats_hourly, methods=["GET"])
-app.add_route("/stats/hourly", stats_hourly, methods=["GET"])
-app.add_route("/stats/date-range", stats_date_range, methods=["GET"])
-app.add_route("/requests", requests, methods=["GET"])
-app.add_route("/v1/chat/completions", chat_completions, methods=["POST"])
+@app.get("/v1/models")
+async def _(request: Request):
+    return await v1_models_openrouter(request)
+
+@app.get("/v1/model/info")
+async def _(request: Request):
+    return await v1_models_info(request)
+
+@app.get("/models")
+async def _(request: Request):
+    return await models(request)
+
+@app.get("/health")
+async def _():
+    return await health()
+
+@app.get("/stats")
+async def _(request: Request, hours: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, timezone_offset: Optional[int] = None):
+    return await stats(request, hours, start_date, end_date, timezone_offset)
+
+@app.delete("/errors")
+async def _(request: Request):
+    return await clear_errors(request)
+
+@app.get("/stats/daily")
+async def _(request: Request, start_date: Optional[str] = None, end_date: Optional[str] = None, timezone_offset: Optional[int] = None):
+    return await stats_daily(request, start_date, end_date, timezone_offset)
+
+@app.get("/stats/hourly")
+async def _(request: Request, date: str = None, timezone_offset: Optional[int] = None):
+    return await stats_hourly(request, date, timezone_offset)
+
+@app.get("/stats/date-range")
+async def _(request: Request):
+    return await stats_date_range(request)
+
+@app.get("/requests")
+async def _(request: Request, hours: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, timezone_offset: Optional[int] = None, offset: int = 0, limit: int = 50, provider: Optional[str] = None, model: Optional[str] = None, min_cost: Optional[float] = None, max_cost: Optional[float] = None, search: Optional[str] = None):
+    return await requests(request, hours, start_date, end_date, timezone_offset, offset, limit, provider, model, min_cost, max_cost, search)
+
+@app.post("/v1/chat/completions")
+async def _(request: Request):
+    return await chat_completions(request)
 
 
 def main():
