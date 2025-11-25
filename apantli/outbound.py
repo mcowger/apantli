@@ -16,13 +16,13 @@ from litellm.exceptions import (
 from apantli.errors import build_error_response, get_error_details, extract_error_message
 from apantli.log_config import logger
 from apantli.model_resolution import calculate_cost
-
+from apantli.types import ChatFunctionCallArgs
 
 async def execute_streaming_request(
     response,
     model: str,
-    request_data: dict,
-    request_data_for_logging: dict,
+    request_data: ChatFunctionCallArgs,
+    request_data_for_logging: ChatFunctionCallArgs,
     start_time: float,
     db: Database,
     request: Request
@@ -42,13 +42,13 @@ async def execute_streaming_request(
         StreamingResponse with SSE format
     """
     # Extract provider before creating generator (from remapped litellm model name)
-    litellm_model = request_data.get('model', '')
+    litellm_model = request_data.model
     provider = infer_provider_from_model(litellm_model)
 
     # Collect chunks for logging
     full_response = {
         'id': None,
-        'model': request_data['model'],  # Use full LiteLLM model name for cost calculation
+        'model': request_data.model,  # Use full LiteLLM model name for cost calculation
         'choices': [{'message': {'role': 'assistant', 'content': ''}, 'finish_reason': None}],
         'usage': {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
     }
@@ -138,8 +138,8 @@ async def execute_streaming_request(
 async def execute_request(
     response,
     model: str,
-    request_data: dict,
-    request_data_for_logging: dict,
+    request_data: ChatFunctionCallArgs,
+    request_data_for_logging: ChatFunctionCallArgs,
     start_time: float,
     db: Database
 ) -> JSONResponse:
@@ -188,11 +188,11 @@ async def execute_request(
 
     return JSONResponse(content=response_dict)
 
-async def handle_llm_error(e: Exception, start_time: float, request_data: dict,
-                          request_data_for_logging: dict, db: Database) -> JSONResponse:
+async def handle_llm_error(e: Exception, start_time: float, request_data: ChatFunctionCallArgs,
+                          request_data_for_logging: ChatFunctionCallArgs, db: Database) -> JSONResponse:
     """Handle LLM API errors with consistent logging and response formatting."""
     duration_ms = int((time.time() - start_time) * 1000)
-    model_name = request_data.get('model', 'unknown')
+    model_name = request_data.model
     provider = infer_provider_from_model(model_name)
 
     # Get error details from error mapping
@@ -217,7 +217,7 @@ async def handle_llm_error(e: Exception, start_time: float, request_data: dict,
     )
 
     # Console log with clean error message
-    logger(f"✗ LLM Response: {model_name} ({provider}) | {duration_ms}ms | Error: {error_name}: {clean_error_msg}")
+    logger.info(f"✗ LLM Response: {model_name} ({provider}) | {duration_ms}ms | Error: {error_name}: {clean_error_msg}")
 
     # Build and return error response with clean message
     error_response = build_error_response(error_type, clean_error_msg, error_code)

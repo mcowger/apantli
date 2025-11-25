@@ -23,7 +23,7 @@ class ProviderConfig(BaseModel):
   api_key: str = Field(..., alias="api_key", description="API key.  Can be env var (os.environ/VAR_NAME) or raw key")
   timeout: Optional[int] = Field(None, description="Request timeout override")
   num_retries: Optional[int] = Field(None, description="Retry count override")
-  base_url: str = Field(None,description="API Base URL")
+  base_url: str = Field( ...,description="API Base URL")
   catwalk_name: Optional[str] = Field(None,description="key used for provider lookup into catwalk pricing index")
   custom_llm_provider: Optional[str] =  Field(None,description="override for custom llm provider")
   headers: Optional[dict] = Field(None,description="optional headers that will be sent with any request to this provider")
@@ -86,13 +86,10 @@ class Config:
           timeout=provider_value.get('timeout',DEFAULT_TIMEOUT),
           num_retries=provider_value.get('num_retries',DEFAULT_RETRIES),
           base_url=provider_value.get('base_url'),
+          catwalk_name=provider_value.get('catwalk_name', None),
+          custom_llm_provider=provider_value.get('custom_llm_provider',None),
+          headers=provider_value.get('headers',None),
         )
-        if provider_value.get("catwalk_name",None):
-          provider_config.catwalk_name=provider_value.get("catwalk_name")
-        if provider_value.get("custom_llm_provider",None):
-          provider_config.custom_llm_provider=provider_value.get("custom_llm_provider")
-        if provider_value.get("headers",None):
-          provider_config.headers=provider_value.get("headers")
 
         providers[provider_name] = provider_config
 

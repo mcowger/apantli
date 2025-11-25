@@ -2,11 +2,6 @@ import logging
 import sys
 from typing import Optional
 
-try:
-    from colorlog import ColoredFormatter
-    COLOR_AVAILABLE = True
-except ImportError:
-    COLOR_AVAILABLE = False
 
 # Module-level logger export
 logger: logging.Logger
@@ -16,6 +11,12 @@ def get_logger(name: Optional[str] = None) -> logging.Logger:
     """
     Return a configured logger with consistent formatting and optional color support.
     """
+    try:
+        from colorlog import ColoredFormatter
+        COLOR_AVAILABLE = True
+    except ImportError:
+        COLOR_AVAILABLE = False
+
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
 
@@ -30,7 +31,7 @@ def get_logger(name: Optional[str] = None) -> logging.Logger:
     log_format = "%(asctime)s %(levelname)s:     %(message)s"
 
     if COLOR_AVAILABLE:
-        formatter = ColoredFormatter(
+        formatter = ColoredFormatter( # pyright: ignore[reportPossiblyUnboundVariable]
             "%(log_color)s%(asctime)s %(levelname)s:%(reset)s     %(message)s",
             datefmt=timestamp_format,
             log_colors={

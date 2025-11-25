@@ -22,7 +22,7 @@ from apantli.config import Config
 from apantli.errors import build_error_response
 from apantli.stats import stats, stats_daily, stats_date_range, stats_hourly, requests, clear_errors
 from apantli.ui import dashboard, compare_page
-from apantli.incoming import chat_completions, health, v1_models_info, v1_models_openrouter
+from apantli.incoming import chat_completions, health, v1_models_openrouter #,v1_models_info
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -74,9 +74,9 @@ app.add_route("/compare", compare_page, methods=["GET"])
 async def _(request: Request):
     return await v1_models_openrouter(request)
 
-@app.get("/v1/model/info")
-async def _(request: Request):
-    return await v1_models_info(request)
+# @app.get("/v1/model/info")
+# async def _(request: Request):
+#     return await v1_models_info(request)
 
 @app.get("/health")
 async def _():
@@ -95,7 +95,7 @@ async def _(request: Request, start_date: Optional[str] = None, end_date: Option
     return await stats_daily(request, start_date, end_date, timezone_offset)
 
 @app.get("/stats/hourly")
-async def _(request: Request, date: str = None, timezone_offset: Optional[int] = None):
+async def _(request: Request, date: str = None, timezone_offset: Optional[int] = None): # pyright: ignore[reportArgumentType]
     return await stats_hourly(request, date, timezone_offset)
 
 @app.get("/stats/date-range")

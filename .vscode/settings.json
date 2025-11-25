@@ -1,0 +1,7 @@
+{
+    "editor.defaultFormatter": "ms-python.vscode-pylance",
+    "python.analysis.enablePytestSupport": false,
+    "python.languageServer": "Pylance",
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.typeEvaluation.strictDictionaryInference": true
+}

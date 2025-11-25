@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, UTC
 from typing import Optional
 from contextlib import asynccontextmanager
-
+from apantli.types import ChatFunctionCallArgs
 import litellm
 
 
@@ -82,7 +82,7 @@ class Database:
       """)
 
   async def log_request(self, model: str, provider: str, response: Optional[dict],
-                       duration_ms: int, request_data: dict,
+                       duration_ms: int, request_data: ChatFunctionCallArgs,
                        error: Optional[str] = None):
     """Log a request to SQLite."""
     async with self._get_connection() as conn:
@@ -95,7 +95,7 @@ class Database:
       cost = 0.0
       if response:
         try:
-          cost = litellm.completion_cost(completion_response=response)
+          cost = litellm.completion_cost(completion_response=response) # pyright: ignore[reportPrivateImportUsage]
         except Exception:
           pass
 

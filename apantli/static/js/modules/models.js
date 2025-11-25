@@ -10,7 +10,7 @@ export async function loadModels() {
 
   // Convert to array format for sorting: [name, provider, litellm_model, input_cost, output_cost]
   state.modelsData = data.models.map(m => [
-    m.name,
+    m.id,
     m.provider,
     m.litellm_model,
     m.input_cost_per_million || 0,
