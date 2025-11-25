@@ -8,6 +8,8 @@
     <script>
         // Version marker to help debug caching issues
         window.APANTLI_VERSION = '2025-11-05-003';
+        // Pass server-provided token to Alpine
+        window.APANTLI_TOKEN = '{{ token }}';
     </script>
     <script defer src="/static/alpine-persist.min.js"></script>
     <script defer src="/static/alpine.min.js"></script>

@@ -138,6 +138,12 @@ def authenticated_route(func: Callable) -> Callable:
         if is_authentication_required():
             # If authentication is required, `get_current_user` will raise an exception if the user is not authenticated.
             request = kwargs.get("request")
+            # If not in kwargs, check in args (FastAPI passes Request as positional arg)
+            if not request and args:
+                for arg in args:
+                    if isinstance(arg, Request):
+                        request = arg
+                        break
             if not request:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -160,6 +166,12 @@ def authenticated_ui_route(func: Callable) -> Callable:
         if is_ui_authentication_required():
             # If UI authentication is required, `get_current_ui_user` will return a response if the user is not authenticated.
             request = kwargs.get("request")
+            # If not in kwargs, check in args (FastAPI passes Request as positional arg)
+            if not request and args:
+                for arg in args:
+                    if isinstance(arg, Request):
+                        request = arg
+                        break
             if not request:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

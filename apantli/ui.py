@@ -2,8 +2,8 @@ from fastapi import Request
 
 from fastapi.templating import Jinja2Templates
 
-from apantli.auth import authenticated_route, authenticated_ui_route
-
+from apantli.auth import authenticated_ui_route
+import os
 # Templates
 templates = Jinja2Templates(directory="templates")
 
@@ -21,12 +21,15 @@ async def dashboard(request: Request):
 
 @authenticated_ui_route
 async def compare_page(request: Request):
+
+    api_token = os.environ.get("API_TOKEN_REQUIRED", None)
     """Chat comparison interface for testing multiple models side-by-side."""
     response = templates.TemplateResponse(
         "compare.html",
         {
             "request": request,
-            "models": list(request.app.state.model_map.keys())
+            "models": list(request.app.state.model_map.keys()),
+            "token": api_token
         }
     )
     # Prevent browser caching of the HTML to avoid stale UI bugs

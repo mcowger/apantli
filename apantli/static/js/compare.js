@@ -86,8 +86,12 @@ function compareApp() {
     // Loading state
     isLoading: false,
 
+    // API token for authentication (from server)
+    apiToken: null,
+
     // Initialize
     async init() {
+      this.apiToken = window.APANTLI_TOKEN || null
       this.loadTheme()
       this.loadFonts()
       await this.loadModels()
@@ -294,7 +298,7 @@ function compareApp() {
       // Send to all enabled slots in parallel
       const promises = this.slots.map((slot, index) => {
         if (slot.enabled) {
-          return this.sendToSlot(index, userMessage)
+          return this.sendToSlot(index, userMessage, this.apiToken)
         }
         return Promise.resolve()
       })
@@ -310,7 +314,7 @@ function compareApp() {
     },
 
     // Send message to a specific slot
-    async sendToSlot(slotIndex, userMessage) {
+    async sendToSlot(slotIndex, userMessage, token) {
       const slot = this.slots[slotIndex]
 
       // Set conversation model on first message
@@ -362,11 +366,18 @@ function compareApp() {
       slot.streamingContent = ''
 
       try {
+        const headers = {
+          'Content-Type': 'application/json'
+        }
+        
+        // Add authorization header if token is present
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`
+        }
+        
         const response = await fetch('/v1/chat/completions', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: headers,
           body: JSON.stringify(requestBody)
         })
 
