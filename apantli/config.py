@@ -30,7 +30,8 @@ class ModelConfig(BaseModel):
   """Configuration for a single model."""
   model_name: str = Field(..., description="Alias used by clients")
   litellm_model: str = Field(..., alias="model", description="LiteLLM model identifier")
-  api_key_var: str = Field(..., alias="api_key", description="Environment variable reference")
+  costing_model: str = Field(..., alias="costing_model", description="Identifier used for model capability & costing lookups")
+  api_key_var: str = Field(..., alias="api_key", description="API key.  Can be env var (os.environ/VAR_NAME) or raw key")
   timeout: Optional[int] = Field(None, description="Request timeout override")
   num_retries: Optional[int] = Field(None, description="Retry count override")
   temperature: Optional[float] = None
@@ -40,28 +41,6 @@ class ModelConfig(BaseModel):
     populate_by_name = True
     extra = "allow"  # Allow extra fields for future LiteLLM params
 
-  @field_validator('api_key_var')
-  @classmethod
-  def validate_api_key_format(cls, v: str) -> str:
-    """Ensure API key follows os.environ/VAR format."""
-    if not v.startswith('os.environ/'):
-      raise ValueError(
-        f"API key must be in format 'os.environ/VAR_NAME', got: {v}"
-      )
-    return v
-
-  @field_validator('api_key_var')
-  @classmethod
-  def check_env_var_exists(cls, v: str) -> str:
-    """Warn if environment variable is not set."""
-    var_name = v.split('/', 1)[1]
-    if var_name not in os.environ:
-      warnings.warn(
-        f"Environment variable {var_name} not set. "
-        f"Requests using this model will fail with authentication error.",
-        UserWarning
-      )
-    return v
 
   @field_validator('timeout')
   @classmethod
@@ -79,7 +58,7 @@ class ModelConfig(BaseModel):
       raise ValueError(f"Retries must be non-negative, got: {v}")
     return v
 
-  def get_api_key(self) -> str:
+  def get_api_key_from_env(self) -> str:
     """Resolve API key from environment."""
     var_name = self.api_key_var.split('/', 1)[1]
     return os.environ.get(var_name, '')
@@ -106,7 +85,7 @@ class ModelConfig(BaseModel):
 class Config:
   """Application configuration manager."""
 
-  def __init__(self, config_path: str = "config.yaml"):
+  def __init__(self, config_path: str = "config.yaml.jinja"):
     self.config_path = config_path
     self.models: Dict[str, ModelConfig] = {}
     self.reload()
@@ -158,6 +137,7 @@ class Config:
           litellm_params = model_dict.get('litellm_params', {})
           model_config = ModelConfig(
             model_name=model_name,
+            costing_model=model_dict.get('costing_model')
             **litellm_params
           )
 

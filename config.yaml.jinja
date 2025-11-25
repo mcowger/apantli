@@ -1,0 +1,74 @@
+{% set kilo_base_url = "https://api.kilocode.ai/api/openrouter" %}
+{% set kilocode_version = "4.121.2" %}
+{% set kilo_task_id = uuid() %}
+{% set kilo_headers %}X-Stainless-OS: "MacOS"
+accept-language: "*"
+X-Stainless-Arch: "arm64"
+X-Stainless-Lang: "js"
+X-Title: "Kilo Code"
+X-KiloCode-Version: "{{ kilocode_version }}"
+User-Agent: "Kilo-Code/{{ kilocode_version }}"
+HTTP-Referer: "https://kilocode.ai"
+X-KiloCode-TaskId: "{{ kilo_task_id }}"{% endset %}
+
+
+{% set openai_models = [
+    {"model_name": "openai/gpt-5.1", "model_id": "openai/gpt-5.1", "costing_model": "openai/gpt-5.1"},
+    {"model_name": "openai/gpt-5.1-codex", "model_id": "openai/gpt-5.1-codex", "costing_model": "openai/gpt-5.1-codex"},
+    {"model_name": "openai/gpt-5.1-codex-mini", "model_id": "openai/gpt-5.1-codex-mini", "costing_model": "openai/gpt-5.1-codex-mini"},
+    {"model_name": "openai/gpt-5.1-chat-latest","model_id": "openai/gpt-5.1-chat-latest", "costing_model": "openai/gpt-5.1-chat-latest"}
+] %}
+
+model_list:
+{% for m in openai_models %}
+  - model_name: {{ m.model_name }}
+    costing_model: {{  m.costing_model if m.costing_model else m.model_id }}
+    litellm_params:
+      model: {{ m.model_id }}
+      api_key: os.environ/OPENAI_API_KEY
+      drop_params: True
+{% endfor %}
+
+
+{% set kilo_models = [
+    {"model_name": "kilocode/haiku-4.5", "model_id": "openrouter/anthropic/claude-haiku-4.5", "costing_model": "openrouter/anthropic/claude-haiku-4.5"},
+    {"model_name": "kilocode/sonnet-4.5",     "model_id": "openrouter/anthropic/claude-sonnet-4.5", "costing_model": "openrouter/anthropic/claude-sonnet-4.5"},
+    {"model_name": "kilocode/gemini-3-pro",     "model_id": "openrouter/google/gemini-3-pro-preview", "costing_model": "openrouter/google/gemini-3-pro-preview"},
+    {"model_name": "kilocode/gemini-flash",     "model_id": "openrouter/google/gemini-2.5-flash", "costing_model": "openrouter/google/gemini-2.5-flash"}
+] %}
+
+{% for m in kilo_models %}
+  - model_name: {{ m.model_name }}
+    costing_model: {{  m.costing_model if m.costing_model else m.model_id }}
+    litellm_params:
+      model: {{ m.model_id }}
+      api_key: os.environ/KILOCODE_API_KEY
+      custom_llm_provider: openrouter
+      api_base: {{ kilo_base_url }}
+      headers:
+        {{ kilo_headers | indent(8) }}
+    model_info:
+      input_cost_per_token: 0
+      output_cost_per_token: 0
+{% endfor %}
+
+
+{% set synthetic_base_url = "https://api.synthetic.new/openai/v1" %}
+{% set synthetic_models = [
+    {"model_name": "synthetic/minimax-m2", "model_id": "hf:MiniMaxAI/MiniMax-M2",  "costing_model": "openrouter/google/gemini-2.5-flash"},
+    {"model_name": "synthetic/glm-4.6",     "model_id": "hf:zai-org/GLM-4.6",  "costing_model": "openrouter/google/gemini-2.5-flash"}
+] %}
+
+{% for m in synthetic_models %}
+  - model_name: {{ m.model_name }}
+    litellm_params:
+      model: openai/{{ m.model_id }}
+      api_key: os.environ/SYNTHETIC_API_KEY
+      custom_llm_provider: openai
+      api_base: {{ synthetic_base_url }}
+    model_info:
+      input_cost_per_token: 0
+      output_cost_per_token: 0
+      max_output_tokens: 8192
+      max_input_tokens: 204000
+{% endfor %}

@@ -3,6 +3,7 @@ model_list:
     litellm_params:
       model: openai/gpt-5.1
       api_key: os.environ/OPENAI_API_KEY
+    costing_model: openai/gpt-5.1-free-other-something
 
       # Optional: timeout, num_retries, temperature, max_tokens, etc.
 

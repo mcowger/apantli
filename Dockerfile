@@ -29,4 +29,4 @@ RUN mkdir -p /data
 EXPOSE 4000
 
 # Default entrypoint with CLI options
-CMD ["/app/.venv/bin/python", "-m", "apantli", "--db", "/data/requests.db", "--config", "/data/config.yaml", "--env", "/data/.env", "--host", "0.0.0.0", "--port", "4000"]
+CMD ["/app/.venv/bin/python", "-m", "apantli", "--db", "/data/requests.db", "--config", "/data/config.yaml.jinja", "--env", "/data/.env", "--host", "0.0.0.0", "--port", "4000"]

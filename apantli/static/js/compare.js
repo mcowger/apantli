@@ -262,7 +262,7 @@ function compareApp() {
     },
 
     // Apply model defaults when a model is selected
-    // Only applies defaults from config.yaml, not hardcoded defaults
+    // Only applies defaults from config.yaml.jinja, not hardcoded defaults
     applyModelDefaults(slotIndex) {
       const slot = this.slots[slotIndex]
       const modelConfig = this.modelConfigs[slot.model]
