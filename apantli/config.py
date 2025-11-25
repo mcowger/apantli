@@ -5,7 +5,7 @@ import logging
 import warnings
 from typing import Dict, Optional, Any
 from pydantic import BaseModel, Field, field_validator, ValidationError
-import yaml
+import json
 from uuid import uuid4
 from jinja2 import Environment
 
@@ -25,75 +25,44 @@ class ConfigError(Exception):
   """Configuration validation error."""
   pass
 
+class ProviderConfig(BaseModel):
+  """Configuration for a single provider."""
+  provider_name: str = Field(..., description="Alias used by clients")
+  api_key: str = Field(..., alias="api_key", description="API key.  Can be env var (os.environ/VAR_NAME) or raw key")
+  timeout: Optional[int] = Field(None, description="Request timeout override")
+  num_retries: Optional[int] = Field(None, description="Retry count override")
+  base_url: str = Field(None,description="API Base URL")
+  catwalk_name: Optional[str] = Field(None,description="key used for provider lookup into catwalk pricing index")
+  custom_llm_provider: Optional[str] =  Field(None,description="override for custom llm provider")
+  headers: Optional[dict] = Field(None,description="optional headers that will be sent with any request to this provider")
+
 
 class ModelConfig(BaseModel):
   """Configuration for a single model."""
   model_name: str = Field(..., description="Alias used by clients")
   litellm_model: str = Field(..., alias="model", description="LiteLLM model identifier")
-  costing_model: str = Field(..., alias="costing_model", description="Identifier used for model capability & costing lookups")
-  api_key_var: str = Field(..., alias="api_key", description="API key.  Can be env var (os.environ/VAR_NAME) or raw key")
-  timeout: Optional[int] = Field(None, description="Request timeout override")
-  num_retries: Optional[int] = Field(None, description="Retry count override")
+  provider_name: str = Field(..., alias="provider_name", description="key for provider info lookup")
+  costing_model: Optional[str] = Field(..., alias="costing_model", description="Identifier used for model capability & costing lookups")
   temperature: Optional[float] = None
   max_tokens: Optional[int] = None
-
-  class Config:
-    populate_by_name = True
-    extra = "allow"  # Allow extra fields for future LiteLLM params
-
-
-  @field_validator('timeout')
-  @classmethod
-  def validate_timeout(cls, v: Optional[int]) -> Optional[int]:
-    """Ensure timeout is positive."""
-    if v is not None and v <= 0:
-      raise ValueError(f"Timeout must be positive, got: {v}")
-    return v
-
-  @field_validator('num_retries')
-  @classmethod
-  def validate_retries(cls, v: Optional[int]) -> Optional[int]:
-    """Ensure retries is non-negative."""
-    if v is not None and v < 0:
-      raise ValueError(f"Retries must be non-negative, got: {v}")
-    return v
-
-  def get_api_key_from_env(self) -> str:
-    """Resolve API key from environment."""
-    var_name = self.api_key_var.split('/', 1)[1]
-    return os.environ.get(var_name, '')
-
-  def to_litellm_params(self, defaults: Optional[Dict[str, Any]] = None) -> dict:
-    """Convert to LiteLLM parameters with defaults.
-
-    Returns a dict suitable for passing to litellm.completion().
-    """
-    if defaults is None:
-      defaults = {}
-
-    # Start with all model fields (excluding model_name)
-    params = self.model_dump(exclude={'model_name'}, by_alias=True)
-
-    # Apply defaults for missing values
-    for key in ['timeout', 'num_retries']:
-      if params.get(key) is None and key in defaults:
-        params[key] = defaults[key]
-
-    return params
-
+  litellm_params: Dict[str, Any] = Field(
+      default_factory=dict,
+      description="Arbitrary LiteLLM parameters"
+  )
 
 class Config:
   """Application configuration manager."""
 
-  def __init__(self, config_path: str = "config.yaml.jinja"):
+  def __init__(self, config_path: str = "config.json.jinja"):
     self.config_path = config_path
     self.models: Dict[str, ModelConfig] = {}
+    self.providers: Dict[str, ProviderConfig] = {}
     self.reload()
 
   def _render_template(self) -> str:
     """Render the config file as a Jinja2 template.
 
-    Returns the rendered YAML content as a string.
+    Returns the rendered JSON content as a string.
     """
     try:
       # Read the raw config file
@@ -112,13 +81,49 @@ class Config:
       logging.warning(f"Failed to render config template: {exc}")
       raise
 
-  def reload(self):
-    """Load or reload configuration from file."""
-    try:
-      # Render the config file as a Jinja2 template first
-      rendered_config = self._render_template()
-      # Parse the rendered YAML
-      config_data = yaml.safe_load(rendered_config)
+  def parse_providers(self,config_data):
+    providers = {}
+    errors = []
+    for provider_dict in config_data.get('provider_list', []):
+      # Extract model_name from top level
+      provider_name = provider_dict.get('provider_name', 'unknown')
+      
+      try:
+        if not provider_dict.get('provider_name'):
+          errors.append("Provider entry missing 'provider_name' field")
+          continue
+
+        # Merge litellm_params with model_name
+
+        provider_config = ProviderConfig(
+          provider_name=provider_name,
+          api_key=provider_dict.get('api_key'),
+          timeout=provider_dict.get('timeout',DEFAULT_TIMEOUT),
+          num_retries=provider_dict.get('num_retries',DEFAULT_RETRIES),
+          base_url=provider_dict.get('base_url'),
+        )
+        if provider_dict.get("catwalk_name",None):
+          provider_config.catwalk_name=provider_dict.get("catwalk_name")
+        if provider_dict.get("custom_llm_provider",None):
+          provider_config.custom_llm_provider=provider_dict.get("custom_llm_provider")
+        if provider_dict.get("headers",None):
+          provider_config.headers=provider_dict.get("headers")
+
+        providers[provider_name] = provider_config
+
+      except ValidationError as exc:
+        # Format validation errors nicely
+        for error in exc.errors():
+          field = error['loc'][0] if error['loc'] else 'unknown'
+          message = error['msg']
+          errors.append(f"Provider '{provider_name}': {field} - {message}")
+      
+    self.providers = providers
+
+    if providers:
+      logging.info(f"{LOG_INDENT}✓ Loaded {len(self.providers)} model(s) from {self.config_path}")
+
+  def parse_models(self,config_data):
 
       # Validate and load models
       models = {}
@@ -137,8 +142,9 @@ class Config:
           litellm_params = model_dict.get('litellm_params', {})
           model_config = ModelConfig(
             model_name=model_name,
-            costing_model=model_dict.get('costing_model')
-            **litellm_params
+            costing_model=model_dict.get('costing_model'),
+            litellm_params=litellm_params,
+            provider_name=model_dict.get("provider_name")
           )
 
           models[model_name] = model_config
@@ -162,12 +168,22 @@ class Config:
       if models:
         logging.info(f"{LOG_INDENT}✓ Loaded {len(self.models)} model(s) from {self.config_path}")
 
+  def reload(self):
+    """Load or reload configuration from file."""
+    try:
+      # Render the config file as a Jinja2 template first
+      rendered_config = self._render_template()
+      # Parse the rendered JSON
+      config_data = json.loads(rendered_config)
+      self.parse_providers(config_data=config_data)
+      self.parse_models(config_data=config_data)
+
     except FileNotFoundError:
       logging.warning(f"Config file not found: {self.config_path}")
       logging.warning("Server will start with no models configured")
       self.models = {}
-    except yaml.YAMLError as exc:
-      logging.warning(f"Invalid YAML in config file: {exc}")
+    except json.JSONDecodeError as exc:
+      logging.warning(f"Invalid JSON in config file: {exc}")
       self.models = {}
     except Exception as exc:
       logging.warning(f"Could not load config: {exc}")

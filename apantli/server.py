@@ -28,7 +28,7 @@ from apantli.incoming import chat_completions, health, models, v1_models_info, v
 async def lifespan(app: FastAPI):
     """Initialize database and load config on startup."""
     # Get config values from app.state if set by main(), otherwise use defaults
-    config_path = getattr(app.state, 'config_path', 'config.yaml.jinja')
+    config_path = getattr(app.state, 'config_path', 'config.json.jinja')
     db_path = getattr(app.state, 'db_path', 'requests.db')
     app.state.timeout = getattr(app.state, 'timeout', 120)
     app.state.retries = getattr(app.state, 'retries', 3)
@@ -137,8 +137,8 @@ def main():
     )
     parser.add_argument(
         "--config",
-        default="config.yaml.jinja",
-        help="Path to config file (default: config.yaml.jinja)"
+        default="config.json.jinja",
+        help="Path to config file (default: config.json.jinja)"
     )
     parser.add_argument(
         "--db",
