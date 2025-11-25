@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
     await db.init()
     app.state.db = db
     yield
+    
 app = FastAPI(title="LLM Proxy", lifespan=lifespan)
 
 # Mount static files directory

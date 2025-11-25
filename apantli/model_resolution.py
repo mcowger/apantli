@@ -3,15 +3,12 @@
 from fastapi import HTTPException, Request
 from apantli.config import ProviderConfig, ModelConfig
 import os
-import logging
 
-from pydantic import BaseModel
-from typing_extensions import Literal
-import litellm
 from apantli.types import ChatFunctionCallArgs
 
 def get_model_for_name(model_name: str, request: Request) -> ModelConfig:
-    model_config: ModelConfig = request.models[model_name] # pyright: ignore[reportAttributeAccessIssue]
+    config = request.app.state.config
+    model_config: ModelConfig = config.models[model_name]
     return model_config
 
 def get_provider_for_model(model: ModelConfig, request: Request) -> ProviderConfig:
@@ -32,7 +29,8 @@ def get_provider_for_model(model: ModelConfig, request: Request) -> ProviderConf
     provider_name = model.provider_name
     
     # Get the provider configuration
-    provider_config = request.providers.get(provider_name) # pyright: ignore[reportAttributeAccessIssue]
+    config = request.app.state.config
+    provider_config = config.providers.get(provider_name)
     if not provider_config:
         raise HTTPException(status_code=500, detail=f"Provider '{provider_name}' not found in configuration for model '{model}'")
     
@@ -56,7 +54,8 @@ def create_completion_request(model: str, request_data: dict, request: Request) 
     try:
         model_config = get_model_for_name(model, request)
     except:
-        available_models = sorted(request.models.keys()) # pyright: ignore[reportAttributeAccessIssue]
+        config = request.app.state.config
+        available_models = sorted(config.models.keys())
         error_msg = f"Model '{model}' not found in configuration."
         if available_models:
             error_msg += f" Available models: {', '.join(available_models)}"
@@ -68,6 +67,11 @@ def create_completion_request(model: str, request_data: dict, request: Request) 
         model = model_config.litellm_model,
         messages=request_data['messages']
     )
+    
+    # Copy over request parameters (stream, temperature, top_p, etc.)
+    for key, value in request_data.items():
+        if key not in ('model', 'messages') and value is not None:
+            setattr(call_request, key, value)
 
     # Handle api_key from config (get from config or resolve environment variable)
     api_key = provider_config.api_key
@@ -92,8 +96,6 @@ def create_completion_request(model: str, request_data: dict, request: Request) 
     # Apply provider defaults if not specified
     if provider_config.timeout:
         call_request.timeout = provider_config.timeout
-    if provider_config.num_retries:
-        call_request.timeout = provider_config.num_retries
     
     call_request.base_url = provider_config.base_url
     

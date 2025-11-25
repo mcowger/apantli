@@ -43,7 +43,7 @@ async def chat_completions(request: Request):
         request_data = create_completion_request(
             model,
             request_data,
-            request.app.state.config
+            request
         )
 
         # Filter parameters based on model-specific constraints
@@ -176,11 +176,10 @@ async def v1_models_openrouter(request: Request):
     
     for model_name, model_config in request.app.state.config.models.items():
         model_config: ModelConfig = get_model_for_name(model_name, request)
-        provider_data: ProviderConfig = get_provider_for_model(model_config,request)
         entry = {
             "id": model_config.model_name,
             "context_length": model_config.context_window,
-            "provider": provider_data.provider_name,
+            "provider": model_config.provider_name,
             "pricing": {},
             "top_provider": {
                 "context_length": model_config.context_window,

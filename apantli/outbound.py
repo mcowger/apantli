@@ -165,7 +165,7 @@ async def execute_request(
         response_dict = json.loads(response.json())
 
     # Extract provider from request_data (which has the remapped litellm model name)
-    litellm_model = request_data.get('model', '')
+    litellm_model = request_data.model
     provider = infer_provider_from_model(litellm_model)
 
     # Fallback: try response metadata if still unknown

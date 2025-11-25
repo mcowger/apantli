@@ -9,7 +9,7 @@ from apantli.log_config import logger
 
 
 # Default configuration
-DEFAULT_TIMEOUT = 120  # seconds
+DEFAULT_TIMEOUT = 300  # seconds
 DEFAULT_RETRIES = 3    # number of retry attempts
 
 
@@ -21,8 +21,8 @@ class ProviderConfig(BaseModel):
   """Configuration for a single provider."""
   provider_name: str = Field(..., description="Alias used by clients")
   api_key: str = Field(..., alias="api_key", description="API key.  Can be env var (os.environ/VAR_NAME) or raw key")
-  timeout: Optional[int] = Field(None, description="Request timeout override")
-  num_retries: Optional[int] = Field(None, description="Retry count override")
+  timeout: Optional[int] = Field(default=300, description="Request timeout override")
+  num_retries: Optional[int] = Field(default=0, description="Retry count override")
   base_url: str = Field( ...,description="API Base URL")
   catwalk_name: Optional[str] = Field(None,description="key used for provider lookup into catwalk pricing index")
   custom_llm_provider: Optional[str] =  Field(None,description="override for custom llm provider")

@@ -2744,4 +2744,4 @@ dev = ["mypy", "pytest", "pytest-asyncio", "types-PyYAML", "types-netifaces"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13"
-content-hash = "3c12712fdbf97efab256f926197f7d6bfd89ed6e34e4c0a914683537a604f966"
+content-hash = "f13dab94e3cbf0424ee9a33322b642b3d5d36cab173b8ab0e71208391f2b445d"

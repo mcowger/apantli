@@ -113,7 +113,7 @@ class Database:
         total_tokens,
         cost,
         duration_ms,
-        json.dumps(request_data),
+        json.dumps(request_data.to_dict()),
         json.dumps(response) if response else None,
         error
       ))
