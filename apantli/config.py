@@ -138,8 +138,6 @@ class Config:
     try:
       # Render the config file as a Jinja2 template first
       rendered_config = self._render_template()
-
-      print(rendered_config)
       # Parse the rendered YAML
       config_data = yaml.safe_load(rendered_config)
 

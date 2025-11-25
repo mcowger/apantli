@@ -36,7 +36,7 @@ import uvicorn
 from dotenv import load_dotenv
 
 # Import from local modules
-from apantli.auth import authenticated_route
+from apantli.auth import authenticated_route, authenticated_ui_route
 from apantli.config import LOG_INDENT, Config
 from apantli.database import Database, RequestFilter
 from apantli.errors import build_error_response, get_error_details, extract_error_message
@@ -707,6 +707,7 @@ async def stats_date_range(request: Request):
 
 
 @app.get("/")
+@authenticated_ui_route
 async def dashboard(request: Request):
     """Simple HTML dashboard."""
     response = templates.TemplateResponse("dashboard.html", {"request": request})
@@ -716,8 +717,8 @@ async def dashboard(request: Request):
     response.headers["Expires"] = "0"
     return response
 
-
 @app.get("/compare")
+@authenticated_ui_route
 async def compare_page(request: Request):
     """Chat comparison interface for testing multiple models side-by-side."""
     response = templates.TemplateResponse(
