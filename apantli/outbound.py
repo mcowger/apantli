@@ -11,15 +11,12 @@ from litellm.exceptions import (
     InternalServerError,
     ServiceUnavailableError,
     APIConnectionError,
-    AuthenticationError,
     Timeout,
-    PermissionDeniedError,
-    NotFoundError,
     BadRequestError,
 )
 from apantli.errors import build_error_response, get_error_details, extract_error_message
 from apantli.config import LOG_INDENT
-from model_resolution import calculate_cost
+from apantli.model_resolution import calculate_cost
 
 
 async def execute_streaming_request(

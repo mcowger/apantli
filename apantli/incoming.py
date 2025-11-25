@@ -1,7 +1,7 @@
 from typing import Any
 from apantli.auth import authenticated_route
-from model_resolution import resolve_model_config, filter_parameters_for_model
-from outbound import execute_request, execute_streaming_request, handle_llm_error
+from apantli.model_resolution import resolve_model_config, filter_parameters_for_model
+from apantli.outbound import execute_request, execute_streaming_request, handle_llm_error
 import time
 from fastapi.responses import JSONResponse
 from apantli.errors import build_error_response

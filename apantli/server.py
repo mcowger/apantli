@@ -5,28 +5,23 @@ Compatible with OpenAI API format, uses LiteLLM SDK for provider routing.
 """
 
 import os
-
-import time
 import argparse
 import logging
-
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import litellm
-
-from incoming import chat_completions, health, models, v1_models_info, v1_models_openrouter
 import uvicorn
 from dotenv import load_dotenv
 # Import from local modules
 from apantli.database import Database
 from apantli.config import LOG_INDENT, Config
 from apantli.errors import build_error_response
-from stats import stats, stats_daily, stats_date_range, stats_hourly, requests
+from apantli.stats import stats, stats_daily, stats_date_range, stats_hourly, requests
 from apantli.ui import dashboard, compare_page
+from apantli.incoming import chat_completions, health, models, v1_models_info, v1_models_openrouter
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -184,7 +179,6 @@ def main():
                 'GET /stats/date-range',
                 'GET /static/',
                 'GET /requests',  # Requests endpoint
-                'GET /models',  # Models endpoint
                 'GET /errors',  # Errors endpoint
                 'GET /health',  # Health check
             ]
@@ -195,7 +189,6 @@ def main():
 
     # Print available URLs
     print(f"\n🚀 Apantli server starting...")
-
     print(f"   Server at http://{args.host}:{args.port}/\n")
 
     if args.reload:
