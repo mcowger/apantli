@@ -68,15 +68,19 @@ async def execute_streaming_request(
                     return
 
                 chunk_dict = chunk.model_dump() if hasattr(chunk, 'model_dump') else dict(chunk)
-
+                
+                # pylance: disable=reportOptionalSubscript
+                
                 # Accumulate content
                 if 'choices' in chunk_dict and len(chunk_dict['choices']) > 0:
                     delta = chunk_dict['choices'][0].get('delta', {})
                     if 'content' in delta and delta['content'] is not None:
-                        full_response['choices'][0]['message']['content'] += delta['content']
+                        full_response['choices'][0]['message']['content'] += delta['content'] #type: ignore[reportOptionalSubscript] 
                     if 'finish_reason' in chunk_dict['choices'][0]:
-                        full_response['choices'][0]['finish_reason'] = chunk_dict['choices'][0]['finish_reason']
-
+                        full_response['choices'][0]['finish_reason'] = chunk_dict['choices'][0]['finish_reason'] #type: ignore[reportOptionalSubscript] 
+                
+                # pylance: enable=reportOptionalSubscript
+                
                 # Capture ID and usage
                 if 'id' in chunk_dict and chunk_dict['id']:
                     full_response['id'] = chunk_dict['id']
@@ -125,9 +129,9 @@ async def execute_streaming_request(
                     logger.info(f"✗ LLM Response: {model} ({provider}) | {duration_ms}ms | Error: {stream_error}")
                 else:
                     usage = full_response.get('usage', {})
-                    prompt_tokens = usage.get('prompt_tokens', 0)
-                    completion_tokens = usage.get('completion_tokens', 0)
-                    total_tokens = usage.get('total_tokens', 0)
+                    prompt_tokens = usage.get('prompt_tokens', 0) #type: ignore[reportOptionalSubscript] 
+                    completion_tokens = usage.get('completion_tokens', 0) #type: ignore[reportOptionalSubscript] 
+                    total_tokens = usage.get('total_tokens', 0) #type: ignore[reportOptionalSubscript] 
                     cost = calculate_cost(full_response)
                     logger.info(f"✓ LLM Response: {model} ({provider}) | {duration_ms}ms | {prompt_tokens}→{completion_tokens} tokens ({total_tokens} total) | ${cost:.4f} [streaming]")
             except Exception as exc:

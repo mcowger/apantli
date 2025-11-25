@@ -168,10 +168,10 @@ class Database:
         WHERE error IS NULL {filter_clause}
       """, params)
       agg_row = await cursor.fetchone()
-      total = agg_row[0] or 0
-      total_tokens = agg_row[1] or 0
-      total_cost = agg_row[2] or 0.0
-      avg_cost = agg_row[3] or 0.0
+      total = agg_row[0] or 0 #type: ignore[reportOptionalSubscript] 
+      total_tokens = agg_row[1] or 0 #type: ignore[reportOptionalSubscript] 
+      total_cost = agg_row[2] or 0.0 #type: ignore[reportOptionalSubscript] 
+      avg_cost = agg_row[3] or 0.0 #type: ignore[reportOptionalSubscript] 
 
       # Get paginated results
       cursor = await conn.execute(f"""
@@ -296,11 +296,11 @@ class Database:
 
       return {
         "totals": {
-          "requests": totals[0] or 0,
-          "cost": round(totals[1] or 0, 4),
-          "prompt_tokens": totals[2] or 0,
-          "completion_tokens": totals[3] or 0,
-          "avg_duration_ms": round(totals[4] or 0, 2)
+          "requests": totals[0] or 0, #type: ignore[reportOptionalSubscript] 
+          "cost": round(totals[1] or 0, 4), #type: ignore[reportOptionalSubscript] 
+          "prompt_tokens": totals[2] or 0, #type: ignore[reportOptionalSubscript] 
+          "completion_tokens": totals[3] or 0, #type: ignore[reportOptionalSubscript] 
+          "avg_duration_ms": round(totals[4] or 0, 2) #type: ignore[reportOptionalSubscript] 
         },
         "by_model": [
           {"model": row[0], "provider": row[1], "requests": row[2], "cost": round(row[3] or 0, 4), "tokens": row[4]}
