@@ -7,4 +7,6 @@ __pycache__/
 .claude
 SERVICES.md
 config.yaml
+config.json
+config.jsonc
 .pytest_cache
