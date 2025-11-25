@@ -184,7 +184,6 @@ async def v1_models_openrouter(request: Request):
         entry = {
             "id": model_config.model_name,
             "context_length": resolved_model_config['context_window'],
-            "max"
             "pricing": {},
             "top_provider": {
                 "context_length": resolved_model_config['context_window'],
