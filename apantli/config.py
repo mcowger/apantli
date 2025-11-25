@@ -1,24 +1,16 @@
 """Configuration management for model routing."""
 
-import os
-import logging
-import warnings
 from typing import Dict, Optional, Any
 from pydantic import BaseModel, Field, field_validator, ValidationError
 import json
 from uuid import uuid4
 from jinja2 import Environment
+from apantli.logging import logger
 
 
 # Default configuration
 DEFAULT_TIMEOUT = 120  # seconds
 DEFAULT_RETRIES = 3    # number of retry attempts
-
-# Log alignment constant to match uvicorn INFO log format
-# Format: "2025-10-11 14:16:31 INFO:     message"
-#         └─────────┴────────┴─────────┘
-#         11 chars + 9 chars + 8 chars = 28 chars
-LOG_INDENT = " " * 28
 
 
 class ConfigError(Exception):
@@ -53,7 +45,7 @@ class ModelConfig(BaseModel):
 class Config:
   """Application configuration manager."""
 
-  def __init__(self, config_path: str = "config.json.jinja"):
+  def __init__(self, config_path: str = "config.jsonc"):
     self.config_path = config_path
     self.models: Dict[str, ModelConfig] = {}
     self.providers: Dict[str, ProviderConfig] = {}
@@ -78,36 +70,29 @@ class Config:
       return rendered
 
     except Exception as exc:
-      logging.warning(f"Failed to render config template: {exc}")
+      logger.warning(f"Failed to render config template: {exc}")
       raise
 
   def parse_providers(self,config_data):
     providers = {}
     errors = []
-    for provider_dict in config_data.get('provider_list', []):
+    for provider_key, provider_value in config_data.get('providers', {}).items():
       # Extract model_name from top level
-      provider_name = provider_dict.get('provider_name', 'unknown')
-      
+      provider_name = provider_key
       try:
-        if not provider_dict.get('provider_name'):
-          errors.append("Provider entry missing 'provider_name' field")
-          continue
-
-        # Merge litellm_params with model_name
-
         provider_config = ProviderConfig(
           provider_name=provider_name,
-          api_key=provider_dict.get('api_key'),
-          timeout=provider_dict.get('timeout',DEFAULT_TIMEOUT),
-          num_retries=provider_dict.get('num_retries',DEFAULT_RETRIES),
-          base_url=provider_dict.get('base_url'),
+          api_key=provider_value.get('api_key'),
+          timeout=provider_value.get('timeout',DEFAULT_TIMEOUT),
+          num_retries=provider_value.get('num_retries',DEFAULT_RETRIES),
+          base_url=provider_value.get('base_url'),
         )
-        if provider_dict.get("catwalk_name",None):
-          provider_config.catwalk_name=provider_dict.get("catwalk_name")
-        if provider_dict.get("custom_llm_provider",None):
-          provider_config.custom_llm_provider=provider_dict.get("custom_llm_provider")
-        if provider_dict.get("headers",None):
-          provider_config.headers=provider_dict.get("headers")
+        if provider_value.get("catwalk_name",None):
+          provider_config.catwalk_name=provider_value.get("catwalk_name")
+        if provider_value.get("custom_llm_provider",None):
+          provider_config.custom_llm_provider=provider_value.get("custom_llm_provider")
+        if provider_value.get("headers",None):
+          provider_config.headers=provider_value.get("headers")
 
         providers[provider_name] = provider_config
 
@@ -120,8 +105,8 @@ class Config:
       
     self.providers = providers
 
-    if providers:
-      logging.info(f"{LOG_INDENT}✓ Loaded {len(self.providers)} model(s) from {self.config_path}")
+
+    logger.info(f"✓ Loaded {len(self.providers)} model(s) from {self.config_path}")
 
   def parse_models(self,config_data):
 
@@ -157,16 +142,16 @@ class Config:
             errors.append(f"Model '{model_name}': {field} - {message}")
 
       if errors:
-        logging.warning("Configuration validation errors:")
+        logger.warning("Configuration validation errors:")
         for error_msg in errors:
-          logging.warning(f"  - {error_msg}")
+          logger.warning(f"  - {error_msg}")
         if not models:
-          logging.warning("No valid models found in configuration")
+          logger.warning("No valid models found in configuration")
 
       self.models = models
 
-      if models:
-        logging.info(f"{LOG_INDENT}✓ Loaded {len(self.models)} model(s) from {self.config_path}")
+
+      logger.info(f"✓ Loaded {len(self.models)} model(s) from {self.config_path}")
 
   def reload(self):
     """Load or reload configuration from file."""
@@ -179,14 +164,14 @@ class Config:
       self.parse_models(config_data=config_data)
 
     except FileNotFoundError:
-      logging.warning(f"Config file not found: {self.config_path}")
-      logging.warning("Server will start with no models configured")
+      logger.warning(f"Config file not found: {self.config_path}")
+      logger.warning("Server will start with no models configured")
       self.models = {}
     except json.JSONDecodeError as exc:
-      logging.warning(f"Invalid JSON in config file: {exc}")
+      logger.warning(f"Invalid JSON in config file: {exc}")
       self.models = {}
     except Exception as exc:
-      logging.warning(f"Could not load config: {exc}")
+      logger.warning(f"Could not load config: {exc}")
       self.models = {}
 
   def get_model(self, model_name: str) -> Optional[ModelConfig]:

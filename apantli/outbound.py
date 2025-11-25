@@ -1,6 +1,5 @@
 
 import json
-import logging
 import time
 from apantli.database import Database
 from apantli.llm import infer_provider_from_model
@@ -15,7 +14,7 @@ from litellm.exceptions import (
     BadRequestError,
 )
 from apantli.errors import build_error_response, get_error_details, extract_error_message
-from apantli.config import LOG_INDENT
+from apantli.logging import logger
 from apantli.model_resolution import calculate_cost
 
 
@@ -64,7 +63,7 @@ async def execute_streaming_request(
                 # Check if client has disconnected before processing
                 if await request.is_disconnected():
                     if not socket_error_logged:
-                        logging.info("Client disconnected during streaming")
+                        logger.info("Client disconnected during streaming")
                         socket_error_logged = True
                     return
 
@@ -89,7 +88,7 @@ async def execute_streaming_request(
         except (BrokenPipeError, ConnectionError, ConnectionResetError) as exc:
             # Client disconnected - stop streaming
             if not socket_error_logged:
-                logging.info(f"Client disconnected during streaming: {type(exc).__name__}")
+                logger.info(f"Client disconnected during streaming: {type(exc).__name__}")
                 socket_error_logged = True
             return
 
@@ -123,16 +122,16 @@ async def execute_streaming_request(
 
                 # Log completion
                 if stream_error:
-                    print(f"{LOG_INDENT}✗ LLM Response: {model} ({provider}) | {duration_ms}ms | Error: {stream_error}")
+                    logger.info(f"✗ LLM Response: {model} ({provider}) | {duration_ms}ms | Error: {stream_error}")
                 else:
                     usage = full_response.get('usage', {})
                     prompt_tokens = usage.get('prompt_tokens', 0)
                     completion_tokens = usage.get('completion_tokens', 0)
                     total_tokens = usage.get('total_tokens', 0)
                     cost = calculate_cost(full_response)
-                    print(f"{LOG_INDENT}✓ LLM Response: {model} ({provider}) | {duration_ms}ms | {prompt_tokens}→{completion_tokens} tokens ({total_tokens} total) | ${cost:.4f} [streaming]")
+                    logger.info(f"✓ LLM Response: {model} ({provider}) | {duration_ms}ms | {prompt_tokens}→{completion_tokens} tokens ({total_tokens} total) | ${cost:.4f} [streaming]")
             except Exception as exc:
-                logging.error(f"Error logging streaming request to database: {exc}")
+                logger.error(f"Error logging streaming request to database: {exc}")
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -185,7 +184,7 @@ async def execute_request(
     completion_tokens = usage.get('completion_tokens', 0)
     total_tokens = usage.get('total_tokens', 0)
     cost = calculate_cost(response)
-    print(f"{LOG_INDENT}✓ LLM Response: {model} ({provider}) | {duration_ms}ms | {prompt_tokens}→{completion_tokens} tokens ({total_tokens} total) | ${cost:.4f}")
+    logger.info(f"✓ LLM Response: {model} ({provider}) | {duration_ms}ms | {prompt_tokens}→{completion_tokens} tokens ({total_tokens} total) | ${cost:.4f}")
 
     return JSONResponse(content=response_dict)
 
@@ -218,7 +217,7 @@ async def handle_llm_error(e: Exception, start_time: float, request_data: dict,
     )
 
     # Console log with clean error message
-    print(f"{LOG_INDENT}✗ LLM Response: {model_name} ({provider}) | {duration_ms}ms | Error: {error_name}: {clean_error_msg}")
+    logger(f"✗ LLM Response: {model_name} ({provider}) | {duration_ms}ms | Error: {error_name}: {clean_error_msg}")
 
     # Build and return error response with clean message
     error_response = build_error_response(error_type, clean_error_msg, error_code)

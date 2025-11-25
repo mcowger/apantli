@@ -2,11 +2,11 @@ from typing import Any
 from apantli.auth import authenticated_route
 from apantli.model_resolution import resolve_model_config, filter_parameters_for_model
 from apantli.outbound import execute_request, execute_streaming_request, handle_llm_error
+from apantli.logging import logger
 import time
 from fastapi.responses import JSONResponse
 from apantli.errors import build_error_response
 from fastapi import Request, HTTPException
-from apantli.config import LOG_INDENT
 import logging
 import litellm
 from litellm import completion
@@ -55,7 +55,7 @@ async def chat_completions(request: Request):
         # Log request start
         is_streaming = request_data.get('stream', False)
         stream_indicator = " [streaming]" if is_streaming else ""
-        print(f"{LOG_INDENT}→ LLM Request: {model}{stream_indicator}")
+        logger.info(f"→ LLM Request: {model}{stream_indicator}")
 
         # Call LiteLLM
         response = completion(**request_data)
@@ -70,7 +70,7 @@ async def chat_completions(request: Request):
         # Model not found - log and return error
         duration_ms = int((time.time() - start_time) * 1000)
         await db.log_request(model, "unknown", None, duration_ms, request_data, error=f"UnknownModel: {exc.detail}") # pyright: ignore[reportPossiblyUnboundVariable]
-        print(f"{LOG_INDENT}✗ LLM Response: {model} (unknown) | {duration_ms}ms | Error: UnknownModel") # pyright: ignore[reportPossiblyUnboundVariable]
+        logger(f"✗ LLM Response: {model} (unknown) | {duration_ms}ms | Error: UnknownModel") # pyright: ignore[reportPossiblyUnboundVariable]
         error_response = build_error_response("invalid_request_error", exc.detail, "model_not_found")
         return JSONResponse(content=error_response, status_code=exc.status_code)
 

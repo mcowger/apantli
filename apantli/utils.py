@@ -1,7 +1,8 @@
-"""Utility functions for date/time operations."""
+"""Utility functions"""
 
 from datetime import datetime, timedelta
 from typing import Optional
+
 
 
 def convert_local_date_to_utc_range(date_str: str, timezone_offset_minutes: int):
