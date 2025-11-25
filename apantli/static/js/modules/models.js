@@ -5,7 +5,7 @@ import { sortTable, applySortIfNeeded, updateSortIndicators } from './tables.js'
 
 // Load models from API
 export async function loadModels() {
-  const res = await fetch('/models')
+  const res = await fetch('/v1/models')
   const data = await res.json()
 
   // Convert to array format for sorting: [name, provider, litellm_model, input_cost, output_cost]

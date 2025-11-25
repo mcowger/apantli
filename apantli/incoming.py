@@ -1,13 +1,14 @@
 from typing import Any
 from apantli.auth import authenticated_route
-from apantli.model_resolution import resolve_model_config, filter_parameters_for_model
+from apantli.model_resolution import resolve_model_config, filter_parameters_for_model, get_provider_for_model
 from apantli.outbound import execute_request, execute_streaming_request, handle_llm_error
-from apantli.logging import logger
+from apantli.config import ModelConfig, ProviderConfig
+from apantli.log_config import logger
 import time
 from fastapi.responses import JSONResponse
 from apantli.errors import build_error_response
 from fastapi import Request, HTTPException
-import logging
+
 import litellm
 from litellm import completion
 from litellm.exceptions import (
@@ -42,8 +43,7 @@ async def chat_completions(request: Request):
             model,
             request_data,
             request.app.state.model_map,
-            request.app.state.timeout,
-            request.app.state.retries
+            request.app.config
         )
 
         # Filter parameters based on model-specific constraints
@@ -81,7 +81,7 @@ async def chat_completions(request: Request):
 
     except Exception as exc:
         # Catch-all for unexpected errors
-        logging.exception(f"Unexpected error in chat completions: {exc}")
+        logger.exception(f"Unexpected error in chat completions: {exc}")
         return await handle_llm_error(exc, start_time, request_data, request_data_for_logging, db) # pyright: ignore[reportPossiblyUnboundVariable]
 
 
@@ -89,61 +89,6 @@ async def chat_completions(request: Request):
 async def health():
     """Health check endpoint."""
     return {"status": "ok"}
-
-
-
-async def models(request: Request):
-    """List available models from config."""
-    model_list = []
-    for model_name, litellm_params in request.app.state.model_map.items():
-        # Try to get pricing info from LiteLLM
-        litellm_model = litellm_params['model']
-        input_cost = None
-        output_cost = None
-
-        try:
-            # Get per-token costs from LiteLLM's cost database
-            # Try with full model name first, then without provider prefix
-            model_data = None
-            if litellm_model in litellm.model_cost:
-                model_data = litellm.model_cost[litellm_model]
-            elif '/' in litellm_model:
-                # Try without provider prefix (e.g., "openai/gpt-4.1" -> "gpt-4.1")
-                model_without_provider = litellm_model.split('/', 1)[1]
-                if model_without_provider in litellm.model_cost:
-                    model_data = litellm.model_cost[model_without_provider]
-
-            if model_data:
-                input_cost_per_token = model_data.get('input_cost_per_token', 0)
-                output_cost_per_token = model_data.get('output_cost_per_token', 0)
-
-                # Convert to per-million
-                if input_cost_per_token:
-                    input_cost = input_cost_per_token * 1000000
-                if output_cost_per_token:
-                    output_cost = output_cost_per_token * 1000000
-        except Exception as exc:
-            pass
-
-        model_info = {
-            'name': model_name,
-            'litellm_model': litellm_params['model'],
-            'provider': litellm_params['model'].split('/')[0] if '/' in litellm_params['model'] else 'unknown',
-            'input_cost_per_million': round(input_cost, 2) if input_cost else None,
-            'output_cost_per_million': round(output_cost, 2) if output_cost else None
-        }
-
-        # Include predefined parameters if they exist in config
-        if 'temperature' in litellm_params:
-            model_info['temperature'] = litellm_params['temperature']
-        if 'top_p' in litellm_params:
-            model_info['top_p'] = litellm_params['top_p']
-        if 'max_tokens' in litellm_params:
-            model_info['max_tokens'] = litellm_params['max_tokens']
-
-        model_list.append(model_info)
-
-    return {'models': model_list}
 
 
 async def v1_models_info(request: Request):
@@ -228,145 +173,86 @@ async def v1_models_openrouter(request: Request):
     of model objects following the OpenRouter API specification.
     """
     import time
+    config = request.app.state.config
     
     model_data = []
-    current_time = int(time.time())
     
-    for model_name, litellm_params in request.app.state.model_map.items():
-        litellm_model = litellm_params['model']
-        
-        # Extract provider from model name
-        provider = litellm_model.split('/')[0] if '/' in litellm_model else 'unknown'
-        
-        # Build model info from LiteLLM's cost database
-        model_info = {}
-        pricing = {
-            'prompt': '0',
-            'completion': '0', 
-            'request': '0',
-            'image': '0',
-            'web_search': '0',
-            'internal_reasoning': '0'
+    for model_name, model_config in request.app.state.config.models.items():
+        fake_request_data = {
         }
-        
-        try:
-            # Get model data from LiteLLM's cost database
-            llm_model_data = None
-            if litellm_model in litellm.model_cost:
-                llm_model_data = litellm.model_cost[litellm_model]
-            elif '/' in litellm_model:
-                # Try without provider prefix (e.g., "openai/gpt-4.1" -> "gpt-4.1")
-                model_without_provider = litellm_model.split('/', 1)[1]
-                if model_without_provider in litellm.model_cost:
-                    llm_model_data = litellm.model_cost[model_without_provider]
-
-            if llm_model_data:
-                # Context length
-                context_length = llm_model_data.get('max_input_tokens', 128000)
-                
-                # Pricing information
-                input_cost_per_token = llm_model_data.get('input_cost_per_token', 0)
-                output_cost_per_token = llm_model_data.get('output_cost_per_token', 0)
-                
-                if input_cost_per_token:
-                    pricing['prompt'] = str(input_cost_per_token)
-                if output_cost_per_token:
-                    pricing['completion'] = str(output_cost_per_token)
-                    
-                # Cache pricing if available
-                if 'cache_read_input_token_cost' in llm_model_data:
-                    pricing['input_cache_read'] = str(llm_model_data['cache_read_input_token_cost'])
-                if 'cache_creation_input_token_cost' in llm_model_data:
-                    pricing['input_cache_write'] = str(llm_model_data['cache_creation_input_token_cost'])
-                    
-                # Architecture information
-                supports_vision = llm_model_data.get('supports_vision', False)
-                
-                model_info = {
-                    'context_length': context_length,
-                    'architecture': {
-                        'modality': 'text+image->text' if supports_vision else 'text->text',
-                        'input_modalities': ['file', 'image', 'text'] if supports_vision else ['text'],
-                        'output_modalities': ['text'],
-                        'tokenizer': provider.title() if provider != 'unknown' else 'Other',
-                        'instruct_type': None
-                    },
-                    'top_provider': {
-                        'context_length': context_length,
-                        'max_completion_tokens': llm_model_data.get('max_output_tokens', None),
-                        'is_moderated': False
-                    }
-                }
-            else:
-                # Default values when no cost data is available
-                model_info = {
-                    'context_length': 128000,
-                    'architecture': {
-                        'modality': 'text->text',
-                        'input_modalities': ['text'],
-                        'output_modalities': ['text'],
-                        'tokenizer': provider.title() if provider != 'unknown' else 'Other',
-                        'instruct_type': None
-                    },
-                    'top_provider': {
-                        'context_length': 128000,
-                        'max_completion_tokens': None,
-                        'is_moderated': False
-                    }
-                }
-        except Exception:
-            # Fallback to default values
-            model_info = {
-                'context_length': 128000,
-                'architecture': {
-                    'modality': 'text->text',
-                    'input_modalities': ['text'],
-                    'output_modalities': ['text'],
-                    'tokenizer': provider.title() if provider != 'unknown' else 'Other',
-                    'instruct_type': None
-                },
-                'top_provider': {
-                    'context_length': 128000,
-                    'max_completion_tokens': None,
-                    'is_moderated': False
-                }
+        resolved_model_config: ModelConfig = resolve_model_config(model_name, fake_request_data, request)
+        entry = {
+            "id": model_config.model_name,
+            "context_length": resolved_model_config['context_window'],
+            "max"
+            "pricing": {},
+            "top_provider": {
+                "context_length": resolved_model_config['context_window'],
+                "max_completion_tokens": resolved_model_config['max_completion_tokens'],
             }
-        
-        # Determine supported parameters based on provider and model
-        supported_parameters = ['max_tokens', 'response_format', 'structured_outputs']
-        
-        # Add provider-specific parameters
-        if provider in ['openai', 'anthropic']:
-            supported_parameters.extend(['temperature', 'top_p', 'frequency_penalty'])
-        if provider == 'anthropic':
-            supported_parameters.extend(['include_reasoning', 'reasoning', 'stop', 'tool_choice', 'tools', 'top_k', 'verbosity'])
-        
-        # Build default parameters from config
-        default_parameters = {}
-        for param in ['temperature', 'top_p', 'frequency_penalty']:
-            if param in litellm_params and litellm_params[param] is not None:
-                default_parameters[param] = litellm_params[param]
-        
-        # Create the model entry in OpenRouter format
-        model_entry = {
-            'id': f"{model_name}",
-            'canonical_slug': f"{model_name}",
-            'hugging_face_id': '',
-            'name': f"{provider.title()}: {model_name.replace('-', ' ').title()}",
-            'created': current_time,
-            'description': f"{provider.title()} model {model_name}."
-                          f"This model supports various text generation tasks and is accessible "
-                          f"through the OpenAI-compatible API.",
-            'context_length': model_info['context_length'],
-            'architecture': model_info['architecture'],
-            'pricing': pricing,
-            'top_provider': model_info['top_provider'],
-            'per_request_limits': None,
-            'supported_parameters': supported_parameters,
-            'default_parameters': default_parameters
         }
         
-        model_data.append(model_entry)
+        model_data.append(entry)
     
     return {'data': model_data}
 
+#####
+    # {
+    #   "id": "anthropic/claude-opus-4.5",
+    #   "canonical_slug": "anthropic/claude-4.5-opus-20251124",
+    #   "hugging_face_id": "",
+    #   "name": "Anthropic: Claude Opus 4.5",
+    #   "created": 1764010580,
+    #   "description": "Claude Opus 4.5 is Anthropic’s frontier reasoning model optimized for complex software engineering, agentic workflows, and long-horizon computer use. It offers strong multimodal capabilities, competitive performance across real-world coding and reasoning benchmarks, and improved robustness to prompt injection. The model is designed to operate efficiently across varied effort levels, enabling developers to trade off speed, depth, and token usage depending on task requirements. It comes with a new parameter to control token efficiency, which can be accessed using the OpenRouter Verbosity parameter with low, medium, or high.\n\nOpus 4.5 supports advanced tool use, extended context management, and coordinated multi-agent setups, making it well-suited for autonomous research, debugging, multi-step planning, and spreadsheet/browser manipulation. It delivers substantial gains in structured reasoning, execution reliability, and alignment compared to prior Opus generations, while reducing token overhead and improving performance on long-running tasks.",
+    #   "context_length": 200000,
+    #   "architecture": {
+    #     "modality": "text+image->text",
+    #     "input_modalities": [
+    #       "file",
+    #       "image",
+    #       "text"
+    #     ],
+    #     "output_modalities": [
+    #       "text"
+    #     ],
+    #     "tokenizer": "Claude",
+    #     "instruct_type": null
+    #   },
+    #   "pricing": {
+    #     "prompt": "0.000005",
+    #     "completion": "0.000025",
+    #     "request": "0",
+    #     "image": "0",
+    #     "web_search": "0.01",
+    #     "internal_reasoning": "0",
+    #     "input_cache_read": "0.0000005",
+    #     "input_cache_write": "0.00000625"
+    #   },
+    #   "top_provider": {
+    #     "context_length": 200000,
+    #     "max_completion_tokens": 32000,
+    #     "is_moderated": true
+    #   },
+    #   "per_request_limits": null,
+    #   "supported_parameters": [
+    #     "include_reasoning",
+    #     "max_tokens",
+    #     "reasoning",
+    #     "response_format",
+    #     "stop",
+    #     "structured_outputs",
+    #     "temperature",
+    #     "tool_choice",
+    #     "tools",
+    #     "top_k",
+    #     "verbosity"
+    #   ],
+    #   "default_parameters": {
+    #     "temperature": null,
+    #     "top_p": null,
+    #     "frequency_penalty": null
+    #   }
+    # },
+# asdf
+# asdf
+# asdf

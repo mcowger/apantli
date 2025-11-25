@@ -14,7 +14,7 @@ from litellm.exceptions import (
     BadRequestError,
 )
 from apantli.errors import build_error_response, get_error_details, extract_error_message
-from apantli.logging import logger
+from apantli.log_config import logger
 from apantli.model_resolution import calculate_cost
 
 

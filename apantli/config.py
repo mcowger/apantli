@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, field_validator, ValidationError
 import json
 from uuid import uuid4
 from jinja2 import Environment
-from apantli.logging import logger
+from apantli.log_config import logger
 
 
 # Default configuration
@@ -32,11 +32,11 @@ class ProviderConfig(BaseModel):
 class ModelConfig(BaseModel):
   """Configuration for a single model."""
   model_name: str = Field(..., description="Alias used by clients")
-  litellm_model: str = Field(..., alias="model", description="LiteLLM model identifier")
-  provider_name: str = Field(..., alias="provider_name", description="key for provider info lookup")
+  litellm_model: str = Field(..., description="LiteLLM model identifier")
+  provider_name: str = Field(..., description="key for provider info lookup")
   costing_model: Optional[str] = Field(..., alias="costing_model", description="Identifier used for model capability & costing lookups")
   temperature: Optional[float] = None
-  max_tokens: Optional[int] = None
+  context_window: Optional[int] = None
   litellm_params: Dict[str, Any] = Field(
       default_factory=dict,
       description="Arbitrary LiteLLM parameters"
@@ -104,9 +104,7 @@ class Config:
           errors.append(f"Provider '{provider_name}': {field} - {message}")
       
     self.providers = providers
-
-
-    logger.info(f"✓ Loaded {len(self.providers)} model(s) from {self.config_path}")
+    logger.info(f"✓ Loaded {len(self.providers)} providers(s) from {self.config_path}")
 
   def parse_models(self,config_data):
 
@@ -114,22 +112,21 @@ class Config:
       models = {}
       errors = []
 
-      for model_dict in config_data.get('model_list', []):
+      for model_key, model_value in config_data.get('model_list', {}).items():
         # Extract model_name from top level
-        model_name = model_dict.get('model_name', 'unknown')
+        model_name = model_key
         
         try:
-          if not model_dict.get('model_name'):
-            errors.append("Model entry missing 'model_name' field")
-            continue
 
           # Merge litellm_params with model_name
-          litellm_params = model_dict.get('litellm_params', {})
+          litellm_params = model_value.get('litellm_params', {})
           model_config = ModelConfig(
             model_name=model_name,
-            costing_model=model_dict.get('costing_model'),
+            litellm_model=model_value.get('litellm_model'),
+            costing_model=model_value.get('costing_model'),
+            context_window=model_value.get('context_window'),
             litellm_params=litellm_params,
-            provider_name=model_dict.get("provider_name")
+            provider_name=model_value.get("provider_name")
           )
 
           models[model_name] = model_config
@@ -149,8 +146,6 @@ class Config:
           logger.warning("No valid models found in configuration")
 
       self.models = models
-
-
       logger.info(f"✓ Loaded {len(self.models)} model(s) from {self.config_path}")
 
   def reload(self):
@@ -182,16 +177,3 @@ class Config:
     """List all configured model names."""
     return list(self.models.keys())
 
-  def get_model_map(self, defaults: Optional[Dict[str, Any]] = None) -> Dict[str, dict]:
-    """Get all models as a dict mapping names to litellm parameters.
-
-    Args:
-      defaults: Default values for timeout, num_retries, etc.
-
-    Returns:
-      Dict mapping model names to litellm_params dicts
-    """
-    return {
-      name: model.to_litellm_params(defaults)
-      for name, model in self.models.items()
-    }

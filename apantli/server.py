@@ -6,7 +6,7 @@ Compatible with OpenAI API format, uses LiteLLM SDK for provider routing.
 
 import os
 import argparse
-import logging
+from apantli.log_config import logger
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from typing import Optional
@@ -22,7 +22,7 @@ from apantli.config import Config
 from apantli.errors import build_error_response
 from apantli.stats import stats, stats_daily, stats_date_range, stats_hourly, requests, clear_errors
 from apantli.ui import dashboard, compare_page
-from apantli.incoming import chat_completions, health, models, v1_models_info, v1_models_openrouter
+from apantli.incoming import chat_completions, health, v1_models_info, v1_models_openrouter
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,10 +36,6 @@ async def lifespan(app: FastAPI):
     # Load configuration
     config = Config(config_path)
     app.state.config = config
-    app.state.model_map = config.get_model_map({
-        'timeout': app.state.timeout,
-        'num_retries': app.state.retries
-    })
 
     # Initialize database
     db = Database(db_path)
@@ -81,10 +77,6 @@ async def _(request: Request):
 @app.get("/v1/model/info")
 async def _(request: Request):
     return await v1_models_info(request)
-
-@app.get("/models")
-async def _(request: Request):
-    return await models(request)
 
 @app.get("/health")
 async def _():
@@ -186,42 +178,10 @@ def main():
     app.state.timeout = args.timeout
     app.state.retries = args.retries
 
-    # Configure logging format with timestamps
-    log_config = uvicorn.config.LOGGING_CONFIG # pyright: ignore[reportAttributeAccessIssue]
-    # Update default formatter (for startup/info logs)
-    log_config["formatters"]["default"]["fmt"] = '%(asctime)s %(levelprefix)s %(message)s'
-    log_config["formatters"]["default"]["datefmt"] = '%Y-%m-%d %H:%M:%S'
-    # Update access formatter (for HTTP request logs)
-    log_config["formatters"]["access"]["fmt"] = '%(asctime)s %(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s'
-    log_config["formatters"]["access"]["datefmt"] = '%Y-%m-%d %H:%M:%S'
-
-    # Add filter to suppress noisy dashboard endpoints
-    class DashboardFilter(logging.Filter):
-        """Filter out noisy dashboard GET requests from access logs."""
-        def filter(self, record):
-            # Suppress logs for dashboard polling endpoints
-            # Check the formatted message since uvicorn log records vary
-            message = record.getMessage() if hasattr(record, 'getMessage') else str(record.msg)
-
-            # Filter out all dashboard-related GET requests
-            noisy_patterns = [
-                'GET / ',  # Dashboard homepage
-                'GET /stats?',
-                'GET /stats/daily?',
-                'GET /stats/date-range',
-                'GET /static/',
-                'GET /requests',  # Requests endpoint
-                'GET /errors',  # Errors endpoint
-                'GET /health',  # Health check
-            ]
-            return not any(pattern in message for pattern in noisy_patterns)
-
-    # Apply filter to access logger
-    logging.getLogger("uvicorn.access").addFilter(DashboardFilter())
-
+    
     # Print available URLs
-    print(f"\n🚀 Apantli server starting...")
-    print(f"   Server at http://{args.host}:{args.port}/\n")
+    logger.info(f"🚀 Apantli server starting...")
+    logger.info(f"Server at http://{args.host}:{args.port}/ui\n")
 
     if args.reload:
         # Reload mode requires import string
@@ -230,7 +190,6 @@ def main():
             host=args.host,
             port=args.port,
             reload=args.reload,
-            log_config=log_config
         )
     else:
         # Production mode can use app object directly
@@ -238,7 +197,6 @@ def main():
             app,
             host=args.host,
             port=args.port,
-            log_config=log_config
         )
 
 
