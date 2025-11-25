@@ -706,7 +706,7 @@ async def stats_date_range(request: Request):
     return await db.get_date_range()
 
 
-@app.get("/")
+@app.get("/ui")
 @authenticated_ui_route
 async def dashboard(request: Request):
     """Simple HTML dashboard."""
