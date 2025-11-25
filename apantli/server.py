@@ -747,8 +747,8 @@ async def v1_models_openrouter(request: Request):
         
         # Create the model entry in OpenRouter format
         model_entry = {
-            'id': f"{provider}/{model_name}",
-            'canonical_slug': f"{provider}/{model_name}",
+            'id': f"{model_name}",
+            'canonical_slug': f"{model_name}",
             'hugging_face_id': '',
             'name': f"{provider.title()}: {model_name.replace('-', ' ').title()}",
             'created': current_time,
