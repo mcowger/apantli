@@ -9,6 +9,7 @@ import argparse
 from apantli.log_config import logger
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import RedirectResponse
 from typing import Optional
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,6 +69,16 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(content=error_response, status_code=exc.status_code)
 
 # Register UI routes
+@app.get("/")
+async def root_redirect():
+    """Redirect root path to /ui."""
+    return RedirectResponse(url="/ui", status_code=301)
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Serve favicon from static directory."""
+    return RedirectResponse(url="/static/favicon.ico", status_code=301)
+
 app.add_route("/ui", dashboard, methods=["GET"])
 app.add_route("/compare", compare_page, methods=["GET"])
 
