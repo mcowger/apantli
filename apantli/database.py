@@ -9,7 +9,7 @@ from datetime import datetime, UTC
 from typing import Optional, Union
 from contextlib import asynccontextmanager
 from apantli.types import ChatFunctionCallArgs, EmbeddingFunctionCallArgs
-import litellm
+from apantli.pricing import CatwalkPricingService
 
 logger = logging.getLogger(__name__)
 
@@ -162,22 +162,45 @@ class Database:
         pass
     logger.info("Database closed")
 
-  async def log_request(self, model: str, provider: str, response: Optional[dict],
-                       duration_ms: int, request_data: Union[ChatFunctionCallArgs, EmbeddingFunctionCallArgs],
-                       error: Optional[str] = None):
-    """Log a request to SQLite via write queue."""
+  async def log_request(
+      self,
+      model: str,
+      provider: str,
+      response: Optional[dict],
+      duration_ms: int,
+      request_data: Union[ChatFunctionCallArgs, EmbeddingFunctionCallArgs],
+      error: Optional[str] = None,
+      pricing_service: Optional["CatwalkPricingService"] = None,
+      catwalk_name: Optional[str] = None,
+      costing_model: Optional[str] = None,
+  ):
+    """Log a request to SQLite via write queue.
+    
+    Args:
+        model: The model name used in the request
+        provider: The provider name (e.g., "openai", "anthropic")
+        response: The response dict from LiteLLM (optional)
+        duration_ms: Request duration in milliseconds
+        request_data: The request data for logging
+        error: Error message if request failed (optional)
+        pricing_service: CatwalkPricingService for cost calculation (optional)
+        catwalk_name: Provider's catwalk identifier for pricing lookup (optional)
+        costing_model: Model ID for costing lookup (optional)
+    """
     usage = response.get('usage', {}) if response else {}
     prompt_tokens = usage.get('prompt_tokens', 0)
     completion_tokens = usage.get('completion_tokens', 0)
     total_tokens = usage.get('total_tokens', 0)
 
-    # Calculate cost using LiteLLM
+    # Calculate cost using CatwalkPricingService
     cost = 0.0
-    if response:
-      try:
-        cost = litellm.completion_cost(completion_response=response) # pyright: ignore[reportPrivateImportUsage]
-      except Exception:
-        pass
+    if pricing_service and prompt_tokens + completion_tokens > 0:
+      cost = pricing_service.calculate_cost(
+          catwalk_name=catwalk_name,
+          costing_model=costing_model,
+          prompt_tokens=prompt_tokens,
+          completion_tokens=completion_tokens,
+      )
 
     await self._queue_write("""
       INSERT INTO requests

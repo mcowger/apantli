@@ -4,6 +4,7 @@ Lightweight LLM proxy with SQLite cost tracking.
 Compatible with OpenAI API format, uses LiteLLM SDK for provider routing.
 """
 
+import asyncio
 import os
 import argparse
 import logging.config
@@ -21,6 +22,7 @@ from dotenv import load_dotenv
 # Import from local modules
 from apantli.database import Database
 from apantli.config import Config
+from apantli.pricing import CatwalkPricingService
 from apantli.errors import build_error_response
 from apantli.stats import stats, stats_daily, stats_date_range, stats_hourly, requests, clear_errors
 from apantli.ui import dashboard, compare_page
@@ -28,7 +30,7 @@ from apantli.incoming import chat_completions, embeddings, health, v1_models_ope
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database and load config on startup."""
+    """Initialize database, pricing service, and load config on startup."""
     # Get config values from app.state if set by main(), otherwise use defaults
     config_path = getattr(app.state, 'config_path', 'config.jsonc')
     db_path = getattr(app.state, 'db_path', 'requests.db')
@@ -43,8 +45,22 @@ async def lifespan(app: FastAPI):
     db = Database(db_path)
     await db.init()
     app.state.db = db
+
+    # Initialize pricing service
+    app.state.pricing_service = CatwalkPricingService()
+    await app.state.pricing_service.initialize()
+    
+    # Start background refresh task
+    refresh_task = asyncio.create_task(app.state.pricing_service.refresh_loop())
+    
     yield
-    # Shutdown: close database write queue
+    
+    # Shutdown: cancel refresh task and close database
+    refresh_task.cancel()
+    try:
+        await refresh_task
+    except asyncio.CancelledError:
+        pass
     await db.close()
     
 app = FastAPI(title="LLM Proxy", lifespan=lifespan)

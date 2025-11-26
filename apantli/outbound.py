@@ -1,6 +1,7 @@
 
 import json
 import time
+from typing import Optional
 from apantli.database import Database
 from apantli.llm import infer_provider_from_model
 from fastapi import Request
@@ -15,8 +16,8 @@ from litellm.exceptions import (
 )
 from apantli.errors import build_error_response, get_error_details, extract_error_message
 from apantli.log_config import logger
-from apantli.model_resolution import calculate_cost
 from apantli.types import ChatFunctionCallArgs, EmbeddingFunctionCallArgs
+from apantli.pricing import CatwalkPricingService
 
 async def execute_streaming_request(
     response,
@@ -25,7 +26,10 @@ async def execute_streaming_request(
     request_data_for_logging: ChatFunctionCallArgs,
     start_time: float,
     db: Database,
-    request: Request
+    request: Request,
+    pricing_service: Optional["CatwalkPricingService"] = None,
+    catwalk_name: Optional[str] = None,
+    costing_model: Optional[str] = None,
 ) -> StreamingResponse:
     """Execute and stream LiteLLM response with logging.
 
@@ -122,18 +126,23 @@ async def execute_streaming_request(
             # Log to database
             try:
                 duration_ms = int((time.time() - start_time) * 1000)
-                await db.log_request(model, provider, full_response, duration_ms, request_data_for_logging, error=stream_error)
+                await db.log_request(
+                    model, provider, full_response, duration_ms, request_data_for_logging,
+                    error=stream_error,
+                    pricing_service=pricing_service,
+                    catwalk_name=catwalk_name,
+                    costing_model=costing_model,
+                )
 
                 # Log completion
                 if stream_error:
                     logger.info(f"✗ LLM Response: {model} ({provider}) | {duration_ms}ms | Error: {stream_error}")
                 else:
                     usage = full_response.get('usage', {})
-                    prompt_tokens = usage.get('prompt_tokens', 0) #type: ignore[reportOptionalSubscript] 
-                    completion_tokens = usage.get('completion_tokens', 0) #type: ignore[reportOptionalSubscript] 
-                    total_tokens = usage.get('total_tokens', 0) #type: ignore[reportOptionalSubscript] 
-                    cost = calculate_cost(full_response)
-                    logger.info(f"✓ LLM Response: {model} ({provider}) | {duration_ms}ms | {prompt_tokens}→{completion_tokens} tokens ({total_tokens} total) | ${cost:.4f} [streaming]")
+                    prompt_tokens = usage.get('prompt_tokens', 0) #type: ignore[reportOptionalSubscript]
+                    completion_tokens = usage.get('completion_tokens', 0) #type: ignore[reportOptionalSubscript]
+                    total_tokens = usage.get('total_tokens', 0) #type: ignore[reportOptionalSubscript]
+                    logger.info(f"✓ LLM Response: {model} ({provider}) | {duration_ms}ms | {prompt_tokens}→{completion_tokens} tokens ({total_tokens} total) [streaming]")
             except Exception as exc:
                 logger.error(f"Error logging streaming request to database: {exc}")
 
@@ -145,7 +154,10 @@ async def execute_request(
     request_data: ChatFunctionCallArgs,
     request_data_for_logging: ChatFunctionCallArgs,
     start_time: float,
-    db: Database
+    db: Database,
+    pricing_service: Optional["CatwalkPricingService"] = None,
+    catwalk_name: Optional[str] = None,
+    costing_model: Optional[str] = None,
 ) -> JSONResponse:
     """Execute non-streaming LiteLLM request with logging.
 
@@ -180,20 +192,32 @@ async def execute_request(
     duration_ms = int((time.time() - start_time) * 1000)
 
     # Log to database
-    await db.log_request(model, provider, response_dict, duration_ms, request_data_for_logging)
+    await db.log_request(
+        model, provider, response_dict, duration_ms, request_data_for_logging,
+        pricing_service=pricing_service,
+        catwalk_name=catwalk_name,
+        costing_model=costing_model,
+    )
 
     # Log completion
     usage = response_dict.get('usage', {})
     prompt_tokens = usage.get('prompt_tokens', 0)
     completion_tokens = usage.get('completion_tokens', 0)
     total_tokens = usage.get('total_tokens', 0)
-    cost = calculate_cost(response)
-    logger.info(f"✓ LLM Response: {model} ({provider}) | {duration_ms}ms | {prompt_tokens}→{completion_tokens} tokens ({total_tokens} total) | ${cost:.4f}")
+    logger.info(f"✓ LLM Response: {model} ({provider}) | {duration_ms}ms | {prompt_tokens}→{completion_tokens} tokens ({total_tokens} total)")
 
     return JSONResponse(content=response_dict)
 
-async def handle_llm_error(e: Exception, start_time: float, request_data: ChatFunctionCallArgs,
-                          request_data_for_logging: ChatFunctionCallArgs, db: Database) -> JSONResponse:
+async def handle_llm_error(
+    e: Exception,
+    start_time: float,
+    request_data: ChatFunctionCallArgs,
+    request_data_for_logging: ChatFunctionCallArgs,
+    db: Database,
+    pricing_service: Optional["CatwalkPricingService"] = None,
+    catwalk_name: Optional[str] = None,
+    costing_model: Optional[str] = None,
+) -> JSONResponse:
     """Handle LLM API errors with consistent logging and response formatting."""
     duration_ms = int((time.time() - start_time) * 1000)
     model_name = request_data.model
@@ -217,7 +241,10 @@ async def handle_llm_error(e: Exception, start_time: float, request_data: ChatFu
         None,
         duration_ms,
         request_data_for_logging,
-        error=f"{error_name}: {clean_error_msg}"
+        error=f"{error_name}: {clean_error_msg}",
+        pricing_service=pricing_service,
+        catwalk_name=catwalk_name,
+        costing_model=costing_model,
     )
 
     # Console log with clean error message
@@ -235,7 +262,10 @@ async def execute_embedding_request(
     request_data: EmbeddingFunctionCallArgs,
     request_data_for_logging: EmbeddingFunctionCallArgs,
     start_time: float,
-    db: Database
+    db: Database,
+    pricing_service: Optional["CatwalkPricingService"] = None,
+    catwalk_name: Optional[str] = None,
+    costing_model: Optional[str] = None,
 ) -> JSONResponse:
     """Execute non-streaming embedding request with logging.
 
@@ -283,7 +313,12 @@ async def execute_embedding_request(
         'model': response_dict.get('model', model)
     }
     
-    await db.log_request(model, provider, log_response, duration_ms, request_data_for_logging)
+    await db.log_request(
+        model, provider, log_response, duration_ms, request_data_for_logging,
+        pricing_service=pricing_service,
+        catwalk_name=catwalk_name,
+        costing_model=costing_model,
+    )
 
     # Log completion
     prompt_tokens = usage.get('prompt_tokens', total_tokens)
@@ -292,8 +327,16 @@ async def execute_embedding_request(
     return JSONResponse(content=response_dict)
 
 
-async def handle_embedding_error(e: Exception, start_time: float, request_data: EmbeddingFunctionCallArgs,
-                                  request_data_for_logging: EmbeddingFunctionCallArgs, db: Database) -> JSONResponse:
+async def handle_embedding_error(
+    e: Exception,
+    start_time: float,
+    request_data: EmbeddingFunctionCallArgs,
+    request_data_for_logging: EmbeddingFunctionCallArgs,
+    db: Database,
+    pricing_service: Optional["CatwalkPricingService"] = None,
+    catwalk_name: Optional[str] = None,
+    costing_model: Optional[str] = None,
+) -> JSONResponse:
     """Handle embedding API errors with consistent logging and response formatting."""
     duration_ms = int((time.time() - start_time) * 1000)
     model_name = request_data.model
@@ -317,7 +360,10 @@ async def handle_embedding_error(e: Exception, start_time: float, request_data: 
         None,
         duration_ms,
         request_data_for_logging,
-        error=f"{error_name}: {clean_error_msg}"
+        error=f"{error_name}: {clean_error_msg}",
+        pricing_service=pricing_service,
+        catwalk_name=catwalk_name,
+        costing_model=costing_model,
     )
 
     # Console log with clean error message

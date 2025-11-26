@@ -27,7 +27,8 @@ dependencies = [
     "netifaces",
     "tenacity",
     "aiosqlite",
-    "colorlogger"
+    "colorlogger",
+    "structlog>=25.5.0",
 ]
 
 [project.optional-dependencies]

@@ -146,11 +146,6 @@ def filter_parameters_for_model(call_request: ChatFunctionCallArgs) -> ChatFunct
 
     return call_request
 
-def calculate_cost(response) -> float:
-    """Calculate cost for a completion response, returning 0.0 on error."""
-    return 0.0
-
-
 def create_embedding_request(model: str, request_data: dict, request: Request) -> EmbeddingFunctionCallArgs:
     """Resolve model configuration and merge with request parameters for embeddings.
 

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional, Tuple
 from apantli.auth import authenticated_route
 from apantli.model_resolution import create_completion_request, create_embedding_request, filter_parameters_for_model, get_provider_for_model, get_model_for_name
 from apantli.outbound import execute_request, execute_streaming_request, handle_llm_error, execute_embedding_request, handle_embedding_error
@@ -25,12 +25,33 @@ from litellm.exceptions import (
 from apantli.types import ChatFunctionCallArgs, EmbeddingFunctionCallArgs
 
 
+def get_pricing_params(model_name: str, request: Request) -> Tuple[Optional[str], Optional[str]]:
+    """Get catwalk_name and costing_model for a model.
+    
+    Args:
+        model_name: The model name to look up
+        request: FastAPI request object
+        
+    Returns:
+        Tuple of (catwalk_name, costing_model), both may be None if model not found
+    """
+    try:
+        model_config = get_model_for_name(model_name, request)
+        provider_config = get_provider_for_model(model_config, request)
+        return provider_config.catwalk_name, model_config.costing_model
+    except (KeyError, HTTPException):
+        return None, None
+
+
 @authenticated_route
 async def chat_completions(request: Request):
     """OpenAI-compatible chat completions endpoint."""
     db = request.app.state.db
+    pricing_service = request.app.state.pricing_service
     start_time = time.time()
     request_data = await request.json()
+    catwalk_name: Optional[str] = None
+    costing_model: Optional[str] = None
  
     try:
         # Validate model parameter
@@ -38,6 +59,9 @@ async def chat_completions(request: Request):
         if not model:
             error_response = build_error_response("invalid_request_error", "Model is required", "missing_model")
             return JSONResponse(content=error_response, status_code=400)
+
+        # Get pricing parameters before model resolution might fail
+        catwalk_name, costing_model = get_pricing_params(model, request)
 
         # Resolve model configuration and merge with request
         request_data = create_completion_request(
@@ -62,14 +86,30 @@ async def chat_completions(request: Request):
 
         # Route to appropriate handler based on streaming mode
         if is_streaming:
-            return await execute_streaming_request(response, model, request_data, request_data_for_logging, start_time, db, request)
+            return await execute_streaming_request(
+                response, model, request_data, request_data_for_logging, start_time, db, request,
+                pricing_service=pricing_service,
+                catwalk_name=catwalk_name,
+                costing_model=costing_model,
+            )
         else:
-            return await execute_request(response, model, request_data, request_data_for_logging, start_time, db)
+            return await execute_request(
+                response, model, request_data, request_data_for_logging, start_time, db,
+                pricing_service=pricing_service,
+                catwalk_name=catwalk_name,
+                costing_model=costing_model,
+            )
 
     except HTTPException as exc:
         # Model not found - log and return error
         duration_ms = int((time.time() - start_time) * 1000)
-        await db.log_request(model, "unknown", None, duration_ms, request_data, error=f"UnknownModel: {exc.detail}") # pyright: ignore[reportPossiblyUnboundVariable]
+        await db.log_request(
+            model, "unknown", None, duration_ms, request_data,  # pyright: ignore[reportPossiblyUnboundVariable]
+            error=f"UnknownModel: {exc.detail}",
+            pricing_service=pricing_service,
+            catwalk_name=catwalk_name,
+            costing_model=costing_model,
+        )
         logger.info(f"✗ LLM Response: {model} (unknown) | {duration_ms}ms | Error: UnknownModel") # pyright: ignore[reportPossiblyUnboundVariable]
         error_response = build_error_response("invalid_request_error", exc.detail, "model_not_found")
         return JSONResponse(content=error_response, status_code=exc.status_code)
@@ -77,20 +117,33 @@ async def chat_completions(request: Request):
     except (RateLimitError, AuthenticationError, PermissionDeniedError, NotFoundError,
             Timeout, InternalServerError, ServiceUnavailableError, APIConnectionError,
             BadRequestError) as exc:
-        return await handle_llm_error(exc, start_time, request_data, request_data_for_logging, db) # pyright: ignore[reportPossiblyUnboundVariable]
+        return await handle_llm_error(
+            exc, start_time, request_data, request_data_for_logging, db,  # pyright: ignore[reportPossiblyUnboundVariable]
+            pricing_service=pricing_service,
+            catwalk_name=catwalk_name,
+            costing_model=costing_model,
+        )
 
     except Exception as exc:
         # Catch-all for unexpected errors
         logger.exception(f"Unexpected error in chat completions: {exc}")
-        return await handle_llm_error(exc, start_time, request_data, request_data_for_logging, db) # pyright: ignore[reportPossiblyUnboundVariable]
+        return await handle_llm_error(
+            exc, start_time, request_data, request_data_for_logging, db,  # pyright: ignore[reportPossiblyUnboundVariable]
+            pricing_service=pricing_service,
+            catwalk_name=catwalk_name,
+            costing_model=costing_model,
+        )
 
 
 @authenticated_route
 async def embeddings(request: Request):
     """OpenAI-compatible embeddings endpoint."""
     db = request.app.state.db
+    pricing_service = request.app.state.pricing_service
     start_time = time.time()
     request_data = await request.json()
+    catwalk_name: Optional[str] = None
+    costing_model: Optional[str] = None
  
     try:
         # Validate model parameter
@@ -104,6 +157,9 @@ async def embeddings(request: Request):
         if not input_data:
             error_response = build_error_response("invalid_request_error", "Input is required", "missing_input")
             return JSONResponse(content=error_response, status_code=400)
+
+        # Get pricing parameters before model resolution might fail
+        catwalk_name, costing_model = get_pricing_params(model, request)
 
         # Resolve model configuration and merge with request
         request_data_obj = create_embedding_request(
@@ -122,12 +178,23 @@ async def embeddings(request: Request):
         response = embedding(**request_data_obj.to_dict())
 
         # Execute and return response
-        return await execute_embedding_request(response, model, request_data_obj, request_data_for_logging, start_time, db)
+        return await execute_embedding_request(
+            response, model, request_data_obj, request_data_for_logging, start_time, db,
+            pricing_service=pricing_service,
+            catwalk_name=catwalk_name,
+            costing_model=costing_model,
+        )
 
     except HTTPException as exc:
         # Model not found - log and return error
         duration_ms = int((time.time() - start_time) * 1000)
-        await db.log_request(model, "unknown", None, duration_ms, request_data_obj, error=f"UnknownModel: {exc.detail}") # pyright: ignore[reportPossiblyUnboundVariable]
+        await db.log_request(
+            model, "unknown", None, duration_ms, request_data_obj,  # pyright: ignore[reportPossiblyUnboundVariable]
+            error=f"UnknownModel: {exc.detail}",
+            pricing_service=pricing_service,
+            catwalk_name=catwalk_name,
+            costing_model=costing_model,
+        )
         logger.info(f"✗ Embedding Response: {model} (unknown) | {duration_ms}ms | Error: UnknownModel") # pyright: ignore[reportPossiblyUnboundVariable]
         error_response = build_error_response("invalid_request_error", exc.detail, "model_not_found")
         return JSONResponse(content=error_response, status_code=exc.status_code)
@@ -135,12 +202,22 @@ async def embeddings(request: Request):
     except (RateLimitError, AuthenticationError, PermissionDeniedError, NotFoundError,
             Timeout, InternalServerError, ServiceUnavailableError, APIConnectionError,
             BadRequestError) as exc:
-        return await handle_embedding_error(exc, start_time, request_data_obj, request_data_for_logging, db) # pyright: ignore[reportPossiblyUnboundVariable]
+        return await handle_embedding_error(
+            exc, start_time, request_data_obj, request_data_for_logging, db,  # pyright: ignore[reportPossiblyUnboundVariable]
+            pricing_service=pricing_service,
+            catwalk_name=catwalk_name,
+            costing_model=costing_model,
+        )
 
     except Exception as exc:
         # Catch-all for unexpected errors
         logger.exception(f"Unexpected error in embeddings: {exc}")
-        return await handle_embedding_error(exc, start_time, request_data_obj, request_data_for_logging, db) # pyright: ignore[reportPossiblyUnboundVariable]
+        return await handle_embedding_error(
+            exc, start_time, request_data_obj, request_data_for_logging, db,  # pyright: ignore[reportPossiblyUnboundVariable]
+            pricing_service=pricing_service,
+            catwalk_name=catwalk_name,
+            costing_model=costing_model,
+        )
 
 
 async def health():
