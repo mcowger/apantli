@@ -97,7 +97,11 @@ def get_uvicorn_config(log_level: str = "info") -> dict[str, Any]:
         },
         "loggers": {
             "uvicorn": {"handlers": ["default"], "level": log_level.upper()},
-            "uvicorn.error": {"level": log_level.upper()},
+            "uvicorn.error": {
+                "handlers": ["default"],
+                "level": "WARNING",   # hides "Uvicorn running on ..." banner
+                "propagate": False,
+            },
             "uvicorn.access": {"handlers": ["access"], "level": log_level.upper(), "propagate": False},
         },
     }
