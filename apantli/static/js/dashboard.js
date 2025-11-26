@@ -176,8 +176,16 @@
                 contentDiv.innerHTML = renderConversationView(requestObj);
             } else {
                 // JSON view
+                let incomingRequestHtml = '<span class="json-null">null</span>';
                 let requestHtml = '<span class="error">Error parsing request</span>';
                 let responseHtml = '<span class="error">Error parsing response</span>';
+
+                try {
+                    if (requestObj.incoming_request_data) {
+                        const incomingReq = JSON.parse(requestObj.incoming_request_data);
+                        incomingRequestHtml = renderJsonTree(incomingReq);
+                    }
+                } catch(e) {}
 
                 try {
                     const req = JSON.parse(requestObj.request_data);
@@ -190,7 +198,9 @@
                 } catch(e) {}
 
                 contentDiv.innerHTML = `
-                    <b>Request:</b>
+                    <b>Incoming Request (from client):</b>
+                    <div class="json-view json-tree">${incomingRequestHtml}</div>
+                    <b>Outbound Request (to LLM):</b>
                     <div class="json-view json-tree">${requestHtml}</div>
                     <b>Response:</b>
                     <div class="json-view json-tree">${responseHtml}</div>
@@ -650,8 +660,16 @@
                 if (currentMode === 'conversation') {
                     contentHtml = renderConversationView(requestObj);
                 } else {
+                    let incomingRequestHtml = '<span class="json-null">null</span>';
                     let requestHtml = '<span class="error">Error parsing request</span>';
                     let responseHtml = '<span class="error">Error parsing response</span>';
+
+                    try {
+                        if (requestObj.incoming_request_data) {
+                            const incomingReq = JSON.parse(requestObj.incoming_request_data);
+                            incomingRequestHtml = renderJsonTree(incomingReq);
+                        }
+                    } catch(e) {}
 
                     try {
                         const req = JSON.parse(requestObj.request_data);
@@ -664,7 +682,9 @@
                     } catch(e) {}
 
                     contentHtml = `
-                        <b>Request:</b>
+                        <b>Incoming Request (from client):</b>
+                        <div class="json-view json-tree">${incomingRequestHtml}</div>
+                        <b>Outbound Request (to LLM):</b>
                         <div class="json-view json-tree">${requestHtml}</div>
                         <b>Response:</b>
                         <div class="json-view json-tree">${responseHtml}</div>

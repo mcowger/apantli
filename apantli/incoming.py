@@ -49,6 +49,8 @@ async def chat_completions(request: Request):
     pricing_service = request.app.state.pricing_service
     start_time = time.time()
     request_data = await request.json()
+    # Capture the original incoming request before any modifications
+    incoming_request_data = dict(request_data)
     catwalk_name: Optional[str] = None
     costing_model: Optional[str] = None
     pricing_override: Optional[Dict[str, float]] = None
@@ -92,6 +94,7 @@ async def chat_completions(request: Request):
                 catwalk_name=catwalk_name,
                 costing_model=costing_model,
                 pricing_override=pricing_override,
+                incoming_request_data=incoming_request_data,
             )
         else:
             return await execute_request(
@@ -100,6 +103,7 @@ async def chat_completions(request: Request):
                 catwalk_name=catwalk_name,
                 costing_model=costing_model,
                 pricing_override=pricing_override,
+                incoming_request_data=incoming_request_data,
             )
 
     except HTTPException as exc:
@@ -112,6 +116,7 @@ async def chat_completions(request: Request):
             catwalk_name=catwalk_name,
             costing_model=costing_model,
             pricing_override=pricing_override,
+            incoming_request_data=incoming_request_data,
         )
         logger.info(f"✗ LLM Response: {model} (unknown) | {duration_ms}ms | Error: UnknownModel") # pyright: ignore[reportPossiblyUnboundVariable]
         error_response = build_error_response("invalid_request_error", exc.detail, "model_not_found")
@@ -126,6 +131,7 @@ async def chat_completions(request: Request):
             catwalk_name=catwalk_name,
             costing_model=costing_model,
             pricing_override=pricing_override,
+            incoming_request_data=incoming_request_data,
         )
 
     except Exception as exc:
@@ -137,6 +143,7 @@ async def chat_completions(request: Request):
             catwalk_name=catwalk_name,
             costing_model=costing_model,
             pricing_override=pricing_override,
+            incoming_request_data=incoming_request_data,
         )
 
 
@@ -147,6 +154,8 @@ async def embeddings(request: Request):
     pricing_service = request.app.state.pricing_service
     start_time = time.time()
     request_data = await request.json()
+    # Capture the original incoming request before any modifications
+    incoming_request_data = dict(request_data)
     catwalk_name: Optional[str] = None
     costing_model: Optional[str] = None
     pricing_override: Optional[Dict[str, float]] = None
@@ -190,6 +199,7 @@ async def embeddings(request: Request):
             catwalk_name=catwalk_name,
             costing_model=costing_model,
             pricing_override=pricing_override,
+            incoming_request_data=incoming_request_data,
         )
 
     except HTTPException as exc:
@@ -202,6 +212,7 @@ async def embeddings(request: Request):
             catwalk_name=catwalk_name,
             costing_model=costing_model,
             pricing_override=pricing_override,
+            incoming_request_data=incoming_request_data,
         )
         logger.info(f"✗ Embedding Response: {model} (unknown) | {duration_ms}ms | Error: UnknownModel") # pyright: ignore[reportPossiblyUnboundVariable]
         error_response = build_error_response("invalid_request_error", exc.detail, "model_not_found")
@@ -216,6 +227,7 @@ async def embeddings(request: Request):
             catwalk_name=catwalk_name,
             costing_model=costing_model,
             pricing_override=pricing_override,
+            incoming_request_data=incoming_request_data,
         )
 
     except Exception as exc:
@@ -227,6 +239,7 @@ async def embeddings(request: Request):
             catwalk_name=catwalk_name,
             costing_model=costing_model,
             pricing_override=pricing_override,
+            incoming_request_data=incoming_request_data,
         )
 
 

@@ -120,11 +120,19 @@ class Database:
           total_tokens INTEGER,
           cost REAL,
           duration_ms INTEGER,
+          incoming_request_data TEXT,
           request_data TEXT,
           response_data TEXT,
           error TEXT
         )
       """)
+
+      # Add incoming_request_data column if it doesn't exist (migration for existing DBs)
+      try:
+        await conn.execute("ALTER TABLE requests ADD COLUMN incoming_request_data TEXT")
+      except Exception:
+        # Column already exists
+        pass
 
       # Create indexes for faster date-based queries
       await conn.execute("""
@@ -174,6 +182,7 @@ class Database:
       catwalk_name: Optional[str] = None,
       costing_model: Optional[str] = None,
       pricing_override: Optional[Dict[str, float]] = None,
+      incoming_request_data: Optional[dict] = None,
   ):
     """Log a request to SQLite via write queue.
     
@@ -182,12 +191,13 @@ class Database:
         provider: The provider name (e.g., "openai", "anthropic")
         response: The response dict from LiteLLM (optional)
         duration_ms: Request duration in milliseconds
-        request_data: The request data for logging
+        request_data: The request data for logging (modified/transformed request sent to LLM)
         error: Error message if request failed (optional)
         pricing_service: CatwalkPricingService for cost calculation (optional)
         catwalk_name: Provider's catwalk identifier for pricing lookup (optional)
         costing_model: Model ID for costing lookup (optional)
         pricing_override: Optional dict with 'cost_per_1m_in' and 'cost_per_1m_out' to override Catwalk pricing
+        incoming_request_data: Original unmodified request from the client (optional)
     """
     usage = response.get('usage', {}) if response else {}
     prompt_tokens = usage.get('prompt_tokens', 0)
@@ -208,8 +218,8 @@ class Database:
     await self._queue_write("""
       INSERT INTO requests
       (timestamp, model, provider, prompt_tokens, completion_tokens, total_tokens,
-       cost, duration_ms, request_data, response_data, error)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       cost, duration_ms, incoming_request_data, request_data, response_data, error)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
       datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
       model,
@@ -219,6 +229,7 @@ class Database:
       total_tokens,
       cost,
       duration_ms,
+      json.dumps(incoming_request_data) if incoming_request_data else None,
       json.dumps(request_data.to_dict()),
       json.dumps(response) if response else None,
       error
@@ -282,7 +293,7 @@ class Database:
       # Get paginated results
       cursor = await conn.execute(f"""
         SELECT timestamp, model, provider, prompt_tokens, completion_tokens, total_tokens,
-               cost, duration_ms, request_data, response_data
+               cost, duration_ms, incoming_request_data, request_data, response_data
         FROM requests
         WHERE error IS NULL {filter_clause}
         ORDER BY timestamp DESC
@@ -301,8 +312,9 @@ class Database:
             "total_tokens": row[5],
             "cost": row[6],
             "duration_ms": row[7],
-            "request_data": row[8],
-            "response_data": row[9]
+            "incoming_request_data": row[8],
+            "request_data": row[9],
+            "response_data": row[10]
           }
           for row in rows
         ],
