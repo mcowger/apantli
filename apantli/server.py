@@ -24,7 +24,7 @@ from apantli.config import Config
 from apantli.errors import build_error_response
 from apantli.stats import stats, stats_daily, stats_date_range, stats_hourly, requests, clear_errors
 from apantli.ui import dashboard, compare_page
-from apantli.incoming import chat_completions, health, v1_models_openrouter #,v1_models_info
+from apantli.incoming import chat_completions, embeddings, health, v1_models_openrouter #,v1_models_info
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -122,6 +122,10 @@ async def _(request: Request, hours: Optional[int] = None, start_date: Optional[
 @app.post("/v1/chat/completions")
 async def _(request: Request):
     return await chat_completions(request)
+
+@app.post("/v1/embeddings")
+async def _(request: Request):
+    return await embeddings(request)
 
 
 def main():

@@ -4,9 +4,9 @@ import aiosqlite
 import json
 from dataclasses import dataclass
 from datetime import datetime, UTC
-from typing import Optional
+from typing import Optional, Union
 from contextlib import asynccontextmanager
-from apantli.types import ChatFunctionCallArgs
+from apantli.types import ChatFunctionCallArgs, EmbeddingFunctionCallArgs
 import litellm
 
 
@@ -82,7 +82,7 @@ class Database:
       """)
 
   async def log_request(self, model: str, provider: str, response: Optional[dict],
-                       duration_ms: int, request_data: ChatFunctionCallArgs,
+                       duration_ms: int, request_data: Union[ChatFunctionCallArgs, EmbeddingFunctionCallArgs],
                        error: Optional[str] = None):
     """Log a request to SQLite."""
     async with self._get_connection() as conn:

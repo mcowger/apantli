@@ -76,3 +76,34 @@ class ChatFunctionCallArgs(BaseModel):
             if field_value is not None:
                 result[field_name] = field_value
         return result
+
+
+class EmbeddingFunctionCallArgs(BaseModel):
+    """Arguments for embedding API calls via LiteLLM."""
+    model: str
+    input: Union[str, List[str], List[int], List[List[int]]]
+    
+    # Optional OpenAI params
+    timeout: Optional[Union[float, str, Any]] = None
+    user: Optional[str] = None
+    dimensions: Optional[int] = None
+    encoding_format: Optional[Literal["float", "base64"]] = None
+    
+    # API/base config - LiteLLM embedding uses api_base, not base_url
+    api_base: Optional[str] = None
+    api_version: Optional[str] = None
+    api_key: Optional[str] = None
+    extra_headers: Optional[Dict[str, Any]] = None
+    custom_llm_provider: Optional[str] = None
+    
+    # Capture all extra kwargs
+    class Config:
+        extra = "allow"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert EmbeddingFunctionCallArgs to a dictionary, excluding None values."""
+        result = {}
+        for field_name, field_value in self:
+            if field_value is not None:
+                result[field_name] = field_value
+        return result

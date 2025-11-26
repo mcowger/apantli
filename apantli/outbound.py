@@ -16,7 +16,7 @@ from litellm.exceptions import (
 from apantli.errors import build_error_response, get_error_details, extract_error_message
 from apantli.log_config import logger
 from apantli.model_resolution import calculate_cost
-from apantli.types import ChatFunctionCallArgs
+from apantli.types import ChatFunctionCallArgs, EmbeddingFunctionCallArgs
 
 async def execute_streaming_request(
     response,
@@ -222,6 +222,106 @@ async def handle_llm_error(e: Exception, start_time: float, request_data: ChatFu
 
     # Console log with clean error message
     logger.info(f"✗ LLM Response: {model_name} ({provider}) | {duration_ms}ms | Error: {error_name}: {clean_error_msg}")
+
+    # Build and return error response with clean message
+    error_response = build_error_response(error_type, clean_error_msg, error_code)
+    return JSONResponse(content=error_response, status_code=status_code)
+
+
+
+async def execute_embedding_request(
+    response,
+    model: str,
+    request_data: EmbeddingFunctionCallArgs,
+    request_data_for_logging: EmbeddingFunctionCallArgs,
+    start_time: float,
+    db: Database
+) -> JSONResponse:
+    """Execute non-streaming embedding request with logging.
+
+    Args:
+        response: LiteLLM embedding response object
+        model: Original model name from request
+        request_data: Request data dict
+        request_data_for_logging: Copy of request data for logging
+        start_time: Request start time
+        db: Database instance
+
+    Returns:
+        JSONResponse with embedding data
+    """
+    # Convert to dict for logging and response
+    if hasattr(response, 'model_dump'):
+        response_dict = response.model_dump()
+    elif hasattr(response, 'dict'):
+        response_dict = response.dict()
+    else:
+        response_dict = json.loads(response.json())
+
+    # Extract provider from request_data (which has the remapped litellm model name)
+    litellm_model = request_data.model
+    provider = infer_provider_from_model(litellm_model)
+
+    # Fallback: try response metadata if still unknown
+    if provider == 'unknown' and hasattr(response, '_hidden_params'):
+        provider = response._hidden_params.get('custom_llm_provider', 'unknown')
+
+    # Calculate duration
+    duration_ms = int((time.time() - start_time) * 1000)
+
+    # Log to database (embeddings don't have completion tokens, just total)
+    usage = response_dict.get('usage', {})
+    total_tokens = usage.get('total_tokens', 0)
+    
+    # Create a minimal response for logging (embeddings use different structure)
+    log_response = {
+        'usage': {
+            'prompt_tokens': usage.get('prompt_tokens', total_tokens),
+            'completion_tokens': 0,
+            'total_tokens': total_tokens
+        },
+        'model': response_dict.get('model', model)
+    }
+    
+    await db.log_request(model, provider, log_response, duration_ms, request_data_for_logging)
+
+    # Log completion
+    prompt_tokens = usage.get('prompt_tokens', total_tokens)
+    logger.info(f"✓ Embedding Response: {model} ({provider}) | {duration_ms}ms | {prompt_tokens} tokens")
+
+    return JSONResponse(content=response_dict)
+
+
+async def handle_embedding_error(e: Exception, start_time: float, request_data: EmbeddingFunctionCallArgs,
+                                  request_data_for_logging: EmbeddingFunctionCallArgs, db: Database) -> JSONResponse:
+    """Handle embedding API errors with consistent logging and response formatting."""
+    duration_ms = int((time.time() - start_time) * 1000)
+    model_name = request_data.model
+    provider = infer_provider_from_model(model_name)
+
+    # Get error details from error mapping
+    status_code, error_type, error_code = get_error_details(e)
+
+    # Extract clean error message for logging and response
+    clean_error_msg = extract_error_message(e)
+
+    # Special handling for provider errors
+    error_name = type(e).__name__
+    if isinstance(e, (InternalServerError, ServiceUnavailableError)):
+        error_name = "ProviderError"
+
+    # Log to database with clean error message
+    await db.log_request(
+        model_name,
+        provider,
+        None,
+        duration_ms,
+        request_data_for_logging,
+        error=f"{error_name}: {clean_error_msg}"
+    )
+
+    # Console log with clean error message
+    logger.info(f"✗ Embedding Response: {model_name} ({provider}) | {duration_ms}ms | Error: {error_name}: {clean_error_msg}")
 
     # Build and return error response with clean message
     error_response = build_error_response(error_type, clean_error_msg, error_code)

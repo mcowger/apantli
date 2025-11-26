@@ -1,10 +1,11 @@
 
 
+from typing import Union
 from fastapi import HTTPException, Request
 from apantli.config import ProviderConfig, ModelConfig
 import os
 
-from apantli.types import ChatFunctionCallArgs
+from apantli.types import ChatFunctionCallArgs, EmbeddingFunctionCallArgs
 
 def get_model_for_name(model_name: str, request: Request) -> ModelConfig:
     config = request.app.state.config
@@ -141,10 +142,80 @@ def filter_parameters_for_model(call_request: ChatFunctionCallArgs) -> ChatFunct
 
     return call_request
 
-
 def calculate_cost(response) -> float:
     """Calculate cost for a completion response, returning 0.0 on error."""
     return 0.0
 
+
+def create_embedding_request(model: str, request_data: dict, request: Request) -> EmbeddingFunctionCallArgs:
+    """Resolve model configuration and merge with request parameters for embeddings.
+
+    Args:
+        model: Model name from request
+        request_data: Request data dict
+        request: FastAPI request object
+
+    Returns:
+        EmbeddingFunctionCallArgs with merged configuration
+
+    Raises:
+        HTTPException: If model not found in configuration
+    """
+
+    try:
+        model_config = get_model_for_name(model, request)
+    except:
+        config = request.app.state.config
+        available_models = sorted(config.models.keys())
+        error_msg = f"Model '{model}' not found in configuration."
+        if available_models:
+            error_msg += f" Available models: {', '.join(available_models)}"
+        raise HTTPException(status_code=404, detail=error_msg)
+    
+    provider_config: ProviderConfig = get_provider_for_model(model_config, request)
+    
+    call_request = EmbeddingFunctionCallArgs(
+        model=model_config.litellm_model,
+        input=request_data['input']
+    )
+    
+    # Copy over request parameters (dimensions, encoding_format, user, etc.)
+    for key, value in request_data.items():
+        if key not in ('model', 'input') and value is not None:
+            setattr(call_request, key, value)
+
+    # Handle api_key from config (get from config or resolve environment variable)
+    api_key = provider_config.api_key
+    if api_key.startswith('os.environ/'):
+        env_var = api_key.split('/', 1)[1]
+        api_key = os.environ.get(env_var, '')
+    if api_key:
+        call_request.api_key = api_key
+
+    # Pass through all other litellm_params (timeout, etc.)
+    # Config provides defaults; client values (except null) always win
+    for key, value in model_config.litellm_params.items():
+        if key not in ('model', 'api_key'):
+            # Use config value only if client didn't provide, or provided None/null
+            # This allows: config defaults, client override, null → use config
+            current_value = getattr(call_request, key, None)
+            if current_value is None:
+                setattr(call_request, key, value)
+
+    # Apply provider defaults if not specified
+    if provider_config.timeout:
+        call_request.timeout = provider_config.timeout
+    
+    # LiteLLM embedding uses api_base, not base_url
+    call_request.api_base = provider_config.base_url
+    
+    if provider_config.headers:
+        call_request.extra_headers = provider_config.headers
+    
+    # Set custom_llm_provider to prevent LiteLLM from printing "Provider List" warnings
+    if provider_config.custom_llm_provider:
+        call_request.custom_llm_provider = provider_config.custom_llm_provider
+    
+    return call_request
 
 

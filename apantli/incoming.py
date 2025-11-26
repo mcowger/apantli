@@ -1,7 +1,7 @@
 from typing import List
 from apantli.auth import authenticated_route
-from apantli.model_resolution import create_completion_request, filter_parameters_for_model, get_provider_for_model, get_model_for_name
-from apantli.outbound import execute_request, execute_streaming_request, handle_llm_error
+from apantli.model_resolution import create_completion_request, create_embedding_request, filter_parameters_for_model, get_provider_for_model, get_model_for_name
+from apantli.outbound import execute_request, execute_streaming_request, handle_llm_error, execute_embedding_request, handle_embedding_error
 from apantli.config import ModelConfig, ProviderConfig
 from apantli.log_config import logger
 import time
@@ -10,7 +10,7 @@ from apantli.errors import build_error_response
 from fastapi import Request, HTTPException
 
 import litellm
-from litellm import completion
+from litellm import completion, embedding
 from litellm.exceptions import (
     RateLimitError,
     InternalServerError,
@@ -22,7 +22,7 @@ from litellm.exceptions import (
     NotFoundError,
     BadRequestError,
 )
-from apantli.types import ChatFunctionCallArgs
+from apantli.types import ChatFunctionCallArgs, EmbeddingFunctionCallArgs
 
 
 @authenticated_route
@@ -84,6 +84,63 @@ async def chat_completions(request: Request):
         logger.exception(f"Unexpected error in chat completions: {exc}")
         return await handle_llm_error(exc, start_time, request_data, request_data_for_logging, db) # pyright: ignore[reportPossiblyUnboundVariable]
 
+
+@authenticated_route
+async def embeddings(request: Request):
+    """OpenAI-compatible embeddings endpoint."""
+    db = request.app.state.db
+    start_time = time.time()
+    request_data = await request.json()
+ 
+    try:
+        # Validate model parameter
+        model = request_data.get('model')
+        if not model:
+            error_response = build_error_response("invalid_request_error", "Model is required", "missing_model")
+            return JSONResponse(content=error_response, status_code=400)
+
+        # Validate input parameter
+        input_data = request_data.get('input')
+        if not input_data:
+            error_response = build_error_response("invalid_request_error", "Input is required", "missing_input")
+            return JSONResponse(content=error_response, status_code=400)
+
+        # Resolve model configuration and merge with request
+        request_data_obj = create_embedding_request(
+            model,
+            request_data,
+            request
+        )
+
+        # Create logging copy with final request_data (includes API key and all params)
+        request_data_for_logging = request_data_obj.model_copy()
+
+        # Log request start
+        logger.info(f"→ Embedding Request: {model}")
+
+        # Call LiteLLM embedding
+        response = embedding(**request_data_obj.to_dict())
+
+        # Execute and return response
+        return await execute_embedding_request(response, model, request_data_obj, request_data_for_logging, start_time, db)
+
+    except HTTPException as exc:
+        # Model not found - log and return error
+        duration_ms = int((time.time() - start_time) * 1000)
+        await db.log_request(model, "unknown", None, duration_ms, request_data_obj, error=f"UnknownModel: {exc.detail}") # pyright: ignore[reportPossiblyUnboundVariable]
+        logger.info(f"✗ Embedding Response: {model} (unknown) | {duration_ms}ms | Error: UnknownModel") # pyright: ignore[reportPossiblyUnboundVariable]
+        error_response = build_error_response("invalid_request_error", exc.detail, "model_not_found")
+        return JSONResponse(content=error_response, status_code=exc.status_code)
+
+    except (RateLimitError, AuthenticationError, PermissionDeniedError, NotFoundError,
+            Timeout, InternalServerError, ServiceUnavailableError, APIConnectionError,
+            BadRequestError) as exc:
+        return await handle_embedding_error(exc, start_time, request_data_obj, request_data_for_logging, db) # pyright: ignore[reportPossiblyUnboundVariable]
+
+    except Exception as exc:
+        # Catch-all for unexpected errors
+        logger.exception(f"Unexpected error in embeddings: {exc}")
+        return await handle_embedding_error(exc, start_time, request_data_obj, request_data_for_logging, db) # pyright: ignore[reportPossiblyUnboundVariable]
 
 
 async def health():
