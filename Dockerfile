@@ -1,5 +1,8 @@
 # Multi-architecture build (arm64 and amd64):
 #   docker buildx build --platform linux/arm64,linux/amd64 -t apantli:latest --push .
+#.  podman build --platform linux/amd64 -t target/mcowger/apantli:dev-amd64 .
+#.  podman push target/mcowger/apantli:dev-amd64
+
 #
 # Single architecture build:
 #   docker build -t apantli:latest .
@@ -21,7 +24,6 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 # Copy project files
 COPY pyproject.toml pyproject.toml
 COPY uv.lock uv.lock
-COPY README.md README.md
 COPY apantli/ apantli/
 COPY templates/ templates/
 
