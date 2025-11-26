@@ -47,6 +47,11 @@ Issues = "https://github.com/pborenstein/apantli/issues"
 [project.scripts]
 apantli = "apantli.server:main"
 
+[tool.uv.scripts]
+test = "python run_unit_tests.py"
+typecheck = "mypy apantli/"
+update-pricing = "python utils/recalculate_costs.py"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
