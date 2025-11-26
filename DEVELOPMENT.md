@@ -4,6 +4,33 @@ This project uses **uv** for dependency management and task execution. All devel
 
 ## Setup
 
+### Quick Start (Fresh Checkout)
+
+For a recently checked out copy of this repository, run the following commands to initialize your development environment:
+
+```bash
+# 1. Ensure you have Python 3.13+ installed
+python3 --version
+
+# 2. Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 3. Create and activate a virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# 4. Install all dependencies (including dev tools)
+uv sync --all-extras
+```
+
+Alternatively, if you have `uv` already installed, you can skip steps 2-3 and let `uv` manage the virtual environment:
+
+```bash
+uv sync --all-extras
+```
+
+This will automatically create a virtual environment and install all dependencies including development tools (pytest, mypy, type stubs).
+
 ### Initial Setup
 ```bash
 uv sync --all-extras
