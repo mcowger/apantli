@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from apantli.auth import authenticated_route
 from apantli.model_resolution import create_completion_request, create_embedding_request, filter_parameters_for_model, get_provider_for_model, get_model_for_name
 from apantli.outbound import execute_request, execute_streaming_request, handle_llm_error, execute_embedding_request, handle_embedding_error
@@ -9,7 +9,6 @@ from fastapi.responses import JSONResponse
 from apantli.errors import build_error_response
 from fastapi import Request, HTTPException
 
-import litellm
 from litellm import completion, embedding
 from litellm.exceptions import (
     RateLimitError,
@@ -236,79 +235,67 @@ async def health():
     return {"status": "ok"}
 
 
-# async def v1_models_info(request: Request):
-#     """List available models in LiteLLM proxy format.
+async def v1_model_info(request: Request):
+    """List available models in LiteLLM proxy format.
 
-#     Returns a JSON object with a top-level 'data' property containing an array
-#     of model objects with model_name, model_info, and litellm_params fields.
-#     """
-#     model_data = []
-#     for model_name, litellm_params in request.app.state.model_map.items():
-#         litellm_model = litellm_params['model']
-
-#         # Build model_info from LiteLLM's cost database
-#         model_info: dict[str, Any] = {}
-
-#         try:
-#             # Get model data from LiteLLM's cost database
-#             llm_model_data = None
-#             if litellm_model in litellm.model_cost:
-#                 llm_model_data = litellm.model_cost[litellm_model]
-#             elif '/' in litellm_model:
-#                 # Try without provider prefix (e.g., "openai/gpt-4.1" -> "gpt-4.1")
-#                 model_without_provider = litellm_model.split('/', 1)[1]
-#                 if model_without_provider in litellm.model_cost:
-#                     llm_model_data = litellm.model_cost[model_without_provider]
-
-#             if llm_model_data:
-#                 # Token limits
-#                 if 'max_output_tokens' in llm_model_data:
-#                     model_info['max_output_tokens'] = llm_model_data['max_output_tokens']
-#                 elif 'max_tokens' in llm_model_data:
-#                     model_info['max_tokens'] = llm_model_data['max_tokens']
-
-#                 if 'max_input_tokens' in llm_model_data:
-#                     model_info['max_input_tokens'] = llm_model_data['max_input_tokens']
-
-#                 # Capability flags
-#                 if 'supports_vision' in llm_model_data:
-#                     model_info['supports_vision'] = llm_model_data['supports_vision']
-#                 if 'supports_prompt_caching' in llm_model_data:
-#                     model_info['supports_prompt_caching'] = llm_model_data['supports_prompt_caching']
-
-#                 # Cost per token
-#                 if 'input_cost_per_token' in llm_model_data:
-#                     model_info['input_cost_per_token'] = llm_model_data['input_cost_per_token']
-#                 if 'output_cost_per_token' in llm_model_data:
-#                     model_info['output_cost_per_token'] = llm_model_data['output_cost_per_token']
-
-#                 # Cache pricing
-#                 if 'cache_creation_input_token_cost' in llm_model_data:
-#                     model_info['cache_creation_input_token_cost'] = llm_model_data['cache_creation_input_token_cost']
-#                 if 'cache_read_input_token_cost' in llm_model_data:
-#                     model_info['cache_read_input_token_cost'] = llm_model_data['cache_read_input_token_cost']
-#         except Exception:
-#             pass
-
-#         # Build litellm_params object
-#         litellm_params_obj = {
-#             'model': str(litellm_model)
-#         }
-
-#         # Include any additional parameters from config
-#         for key in ['temperature', 'top_p', 'max_tokens', 'timeout', 'num_retries']:
-#             if key in litellm_params and litellm_params[key] is not None:
-#                 litellm_params_obj[key] = litellm_params[key]
-
-#         model_entry = {
-#             'model_name': model_name,
-#             'model_info': model_info,
-#             'litellm_params': litellm_params_obj
-#         }
-
-#         model_data.append(model_entry)
-
-#     return {'data': model_data}
+    Returns a JSON object with a top-level 'data' property containing an array
+    of model objects with model_name, model_info, and litellm_params fields.
+    """
+    model_data = []
+    
+    for model_name, model_config in request.app.state.config.models.items():
+        model_config: ModelConfig = model_config
+        
+        # Build model_info from ModelConfig
+        model_info: Dict[str, Any] = {}
+        
+        # Context window / token limits
+        if model_config.context_window is not None:
+            model_info['max_input_tokens'] = model_config.context_window
+        
+        # Pricing override if available
+        if model_config.pricing_override:
+            if 'cost_per_1m_in' in model_config.pricing_override:
+                # Convert from cost per 1M to cost per token
+                model_info['input_cost_per_token'] = model_config.pricing_override['cost_per_1m_in'] / 1_000_000
+            if 'cost_per_1m_out' in model_config.pricing_override:
+                model_info['output_cost_per_token'] = model_config.pricing_override['cost_per_1m_out'] / 1_000_000
+        
+        # Build litellm_params object
+        litellm_params_obj: Dict[str, Any] = {
+            'model': model_config.litellm_model
+        }
+        
+        # Include temperature if set
+        if model_config.temperature is not None:
+            litellm_params_obj['temperature'] = model_config.temperature
+        
+        # Include custom_llm_provider if set
+        if model_config.custom_llm_provider is not None:
+            litellm_params_obj['custom_llm_provider'] = model_config.custom_llm_provider
+        
+        # Include any additional litellm_params from config
+        for key, value in model_config.litellm_params.items():
+            if value is not None:
+                litellm_params_obj[key] = value
+        
+        # Get provider config for timeout and retries
+        provider_config = request.app.state.config.providers.get(model_config.provider_name)
+        if provider_config:
+            if provider_config.timeout is not None:
+                litellm_params_obj['timeout'] = provider_config.timeout
+            if provider_config.num_retries is not None:
+                litellm_params_obj['num_retries'] = provider_config.num_retries
+        
+        model_entry = {
+            'model_name': model_name,
+            'model_info': model_info,
+            'litellm_params': litellm_params_obj
+        }
+        
+        model_data.append(model_entry)
+    
+    return {'data': model_data}
 
 
 async def v1_models_openrouter(request: Request):

@@ -26,7 +26,7 @@ from apantli.pricing import CatwalkPricingService
 from apantli.errors import build_error_response
 from apantli.stats import stats, stats_daily, stats_date_range, stats_hourly, requests, clear_errors
 from apantli.ui import dashboard, compare_page
-from apantli.incoming import chat_completions, embeddings, health, v1_models_openrouter #,v1_models_info
+from apantli.incoming import chat_completions, embeddings, health, v1_models_openrouter, v1_model_info
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -105,6 +105,10 @@ app.add_route("/compare", compare_page, methods=["GET"])
 async def _(request: Request):
     return await v1_models_openrouter(request)
 
+@app.get("/v1/model/info")
+async def _(request: Request):
+    return await v1_model_info(request)
+
 # @app.get("/v1/model/info")
 # async def _(request: Request):
 #     return await v1_models_info(request)
@@ -138,6 +142,7 @@ async def _(request: Request, hours: Optional[int] = None, start_date: Optional[
     return await requests(request, hours, start_date, end_date, timezone_offset, offset, limit, provider, model, min_cost, max_cost, search)
 
 @app.post("/v1/chat/completions")
+@app.post("/chat/completions")
 async def _(request: Request):
     return await chat_completions(request)
 
