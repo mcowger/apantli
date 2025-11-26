@@ -3,7 +3,7 @@
 import { state } from './state.js'
 import { showError, hideError, fetchWithErrorHandling, escapeHtml, copyToClipboard, getProviderColor } from './core.js'
 import { toggleJson } from './utils.js'
-import { loadModels, sortModelsTable } from './models.js'
+import { loadModels, sortModelsTable, reloadModels } from './models.js'
 import { loadRequests, toggleDetailView, toggleDetail, sortRequestsTable } from './requests.js'
 import { refreshStats, filterRequests, sortByModelTable, sortByProviderTable, sortErrorsTable, clearErrors } from './stats.js'
 import { showChartTooltip, hideChartTooltip, renderProviderTrends } from './charts.js'
@@ -73,6 +73,7 @@ window.getProviderColor = getProviderColor
 window.toggleJson = toggleJson
 window.loadModels = loadModels
 window.sortModelsTable = sortModelsTable
+window.reloadModels = reloadModels
 window.loadRequests = () => loadRequests(alpineData)
 window.toggleDetailView = toggleDetailView
 window.toggleDetail = toggleDetail
@@ -101,6 +102,7 @@ export {
   toggleJson,
   loadModels,
   sortModelsTable,
+  reloadModels,
   loadRequests,
   toggleDetailView,
   toggleDetail,

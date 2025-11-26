@@ -105,6 +105,40 @@ app.add_route("/compare", compare_page, methods=["GET"])
 async def _(request: Request):
     return await v1_models_openrouter(request)
 
+@app.post("/admin/reload")
+async def reload_configuration(request: Request):
+    """Reload configuration and pricing data.
+    
+    This endpoint performs a full reload of:
+    - Model configuration from config file
+    - Pricing data from Catwalk API
+    """
+    try:
+        # Reload configuration
+        request.app.state.config.reload()
+        
+        # Refresh pricing data
+        await request.app.state.pricing_service._fetch_and_build_index()
+        
+        logger.info("Configuration and pricing data reloaded successfully")
+        return JSONResponse(
+            content={
+                "status": "success",
+                "message": "Configuration and pricing data reloaded successfully",
+                "models_count": len(request.app.state.config.models),
+                "providers_count": len(request.app.state.config.providers)
+            }
+        )
+    except Exception as exc:
+        logger.error(f"Failed to reload configuration: {exc}")
+        return JSONResponse(
+            content={
+                "status": "error",
+                "message": f"Failed to reload: {str(exc)}"
+            },
+            status_code=500
+        )
+
 @app.get("/v1/model/info")
 async def _(request: Request):
     return await v1_model_info(request)
@@ -144,11 +178,11 @@ async def _(request: Request, hours: Optional[int] = None, start_date: Optional[
 @app.post("/v1/chat/completions")
 @app.post("/chat/completions")
 async def _(request: Request):
-    return await chat_completions(request)
+    return await chat_completions(request) # pyright: ignore[reportGeneralTypeIssues]
 
 @app.post("/v1/embeddings")
 async def _(request: Request):
-    return await embeddings(request)
+    return await embeddings(request) # pyright: ignore[reportGeneralTypeIssues]
 
 
 def main():

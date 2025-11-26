@@ -381,7 +381,15 @@
     </div>
 
     <div id="models-tab" x-show="currentTab === 'models'">
-        <h2>Available Models</h2>
+        <div class="models-header">
+            <h2>Available Models</h2>
+            <button class="btn btn-primary" onclick="reloadModels()" id="reload-models-btn">
+                <span class="reload-icon">⟳</span> Reload
+            </button>
+        </div>
+        <div id="reload-status" class="reload-status" style="display: none;">
+            <span class="status-text">Reloading configuration and pricing data...</span>
+        </div>
         <table id="models-list"></table>
     </div>
 
