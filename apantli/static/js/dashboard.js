@@ -307,16 +307,14 @@
         let modelsData = [];
 
         async function loadModels() {
-            const res = await fetch('/models');
+            const res = await fetch('/v1/models');
             const data = await res.json();
 
-            // Convert to array format for sorting: [name, provider, litellm_model, input_cost, output_cost]
-            modelsData = data.models.map(m => [
-                m.name,
+            // Convert to array format for sorting: [id, provider, context_length]
+            modelsData = data.data.map(m => [
+                m.id,
                 m.provider,
-                m.litellm_model,
-                m.input_cost_per_million || 0,
-                m.output_cost_per_million || 0
+                m.context_length || 0
             ]);
 
             if (!tableSortState['models-list']) {
@@ -336,11 +334,9 @@
             table.innerHTML = `
                 <thead>
                     <tr>
-                        <th class="sortable" onclick="sortModelsTable(0)">Name</th>
+                        <th class="sortable" onclick="sortModelsTable(0)">Model ID</th>
                         <th class="sortable" onclick="sortModelsTable(1)">Provider</th>
-                        <th class="sortable" onclick="sortModelsTable(2)">LiteLLM Model</th>
-                        <th class="sortable" onclick="sortModelsTable(3)">Input Cost/1M</th>
-                        <th class="sortable" onclick="sortModelsTable(4)">Output Cost/1M</th>
+                        <th class="sortable" onclick="sortModelsTable(2)">Context Length</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -348,9 +344,7 @@
                         <tr>
                             <td>${row[0]}</td>
                             <td>${row[1]}</td>
-                            <td>${row[2]}</td>
-                            <td>${row[3] ? '$' + row[3].toFixed(2) : 'N/A'}</td>
-                            <td>${row[4] ? '$' + row[4].toFixed(2) : 'N/A'}</td>
+                            <td>${row[2] ? row[2].toLocaleString() : 'N/A'}</td>
                         </tr>
                     `).join('')}
                 </tbody>

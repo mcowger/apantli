@@ -219,16 +219,16 @@ function compareApp() {
     // Load available models from server
     async loadModels() {
       try {
-        const res = await fetch('/models')
+        const res = await fetch('/v1/models')
         const data = await res.json()
 
-        // Store model names for dropdown
-        this.availableModels = data.models.map(m => m.name).sort()
+        // Store model IDs for dropdown
+        this.availableModels = data.data.map(m => m.id).sort()
 
-        // Store full model configs indexed by name for parameter lookups
+        // Store full model configs indexed by ID for parameter lookups
         this.modelConfigs = {}
-        data.models.forEach(m => {
-          this.modelConfigs[m.name] = m
+        data.data.forEach(m => {
+          this.modelConfigs[m.id] = m
         })
 
         console.log('Loaded models:', this.availableModels.length)

@@ -8,13 +8,11 @@ export async function loadModels() {
   const res = await fetch('/v1/models')
   const data = await res.json()
 
-  // Convert to array format for sorting: [name, provider, litellm_model, input_cost, output_cost]
-  state.modelsData = data.models.map(m => [
+  // Convert to array format for sorting: [id, provider, context_length]
+  state.modelsData = data.data.map(m => [
     m.id,
     m.provider,
-    m.litellm_model,
-    m.input_cost_per_million || 0,
-    m.output_cost_per_million || 0
+    m.context_length || 0
   ])
 
   if (!state.tableSortState['models-list']) {
@@ -36,11 +34,9 @@ function renderModelsTable(data, sortState) {
   table.innerHTML = `
     <thead>
       <tr>
-        <th class="sortable" onclick="window.sortModelsTable(0)">Name</th>
+        <th class="sortable" onclick="window.sortModelsTable(0)">Model ID</th>
         <th class="sortable" onclick="window.sortModelsTable(1)">Provider</th>
-        <th class="sortable" onclick="window.sortModelsTable(2)">LiteLLM Model</th>
-        <th class="sortable" onclick="window.sortModelsTable(3)">Input Cost/1M</th>
-        <th class="sortable" onclick="window.sortModelsTable(4)">Output Cost/1M</th>
+        <th class="sortable" onclick="window.sortModelsTable(2)">Context Length</th>
       </tr>
     </thead>
     <tbody>
@@ -48,9 +44,7 @@ function renderModelsTable(data, sortState) {
         <tr>
           <td>${row[0]}</td>
           <td>${row[1]}</td>
-          <td>${row[2]}</td>
-          <td>${row[3] ? '$' + row[3].toFixed(2) : 'N/A'}</td>
-          <td>${row[4] ? '$' + row[4].toFixed(2) : 'N/A'}</td>
+          <td>${row[2] ? row[2].toLocaleString() : 'N/A'}</td>
         </tr>
       `).join('')}
     </tbody>
