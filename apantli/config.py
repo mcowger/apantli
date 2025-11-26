@@ -42,6 +42,10 @@ class ModelConfig(BaseModel):
       default_factory=dict,
       description="Arbitrary LiteLLM parameters"
   )
+  pricing_override: Optional[Dict[str, float]] = Field(
+      None,
+      description="Optional override for cost_per_1m_in and cost_per_1m_out pricing"
+  )
 
 class Config:
   """Application configuration manager."""
@@ -125,7 +129,8 @@ class Config:
             context_window=model_value.get('context_window'),
             litellm_params=litellm_params,
             provider_name=model_value.get("provider_name"),
-            custom_llm_provider=model_value.get("custom_llm_provider")
+            custom_llm_provider=model_value.get("custom_llm_provider"),
+            pricing_override=model_value.get('pricing_override')
           )
 
           models[model_name] = model_config

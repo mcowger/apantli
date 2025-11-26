@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from apantli.auth import authenticated_route
 from apantli.model_resolution import create_completion_request, create_embedding_request, filter_parameters_for_model, get_provider_for_model, get_model_for_name
 from apantli.outbound import execute_request, execute_streaming_request, handle_llm_error, execute_embedding_request, handle_embedding_error
@@ -25,22 +25,22 @@ from litellm.exceptions import (
 from apantli.types import ChatFunctionCallArgs, EmbeddingFunctionCallArgs
 
 
-def get_pricing_params(model_name: str, request: Request) -> Tuple[Optional[str], Optional[str]]:
-    """Get catwalk_name and costing_model for a model.
+def get_pricing_params(model_name: str, request: Request) -> Tuple[Optional[str], Optional[str], Optional[Dict[str, float]]]:
+    """Get catwalk_name, costing_model, and pricing_override for a model.
     
     Args:
         model_name: The model name to look up
         request: FastAPI request object
         
     Returns:
-        Tuple of (catwalk_name, costing_model), both may be None if model not found
+        Tuple of (catwalk_name, costing_model, pricing_override), all may be None if model not found
     """
     try:
         model_config = get_model_for_name(model_name, request)
         provider_config = get_provider_for_model(model_config, request)
-        return provider_config.catwalk_name, model_config.costing_model
+        return provider_config.catwalk_name, model_config.costing_model, model_config.pricing_override
     except (KeyError, HTTPException):
-        return None, None
+        return None, None, None
 
 
 @authenticated_route
@@ -52,6 +52,7 @@ async def chat_completions(request: Request):
     request_data = await request.json()
     catwalk_name: Optional[str] = None
     costing_model: Optional[str] = None
+    pricing_override: Optional[Dict[str, float]] = None
  
     try:
         # Validate model parameter
@@ -61,7 +62,7 @@ async def chat_completions(request: Request):
             return JSONResponse(content=error_response, status_code=400)
 
         # Get pricing parameters before model resolution might fail
-        catwalk_name, costing_model = get_pricing_params(model, request)
+        catwalk_name, costing_model, pricing_override = get_pricing_params(model, request)
 
         # Resolve model configuration and merge with request
         request_data = create_completion_request(
@@ -91,6 +92,7 @@ async def chat_completions(request: Request):
                 pricing_service=pricing_service,
                 catwalk_name=catwalk_name,
                 costing_model=costing_model,
+                pricing_override=pricing_override,
             )
         else:
             return await execute_request(
@@ -98,6 +100,7 @@ async def chat_completions(request: Request):
                 pricing_service=pricing_service,
                 catwalk_name=catwalk_name,
                 costing_model=costing_model,
+                pricing_override=pricing_override,
             )
 
     except HTTPException as exc:
@@ -109,6 +112,7 @@ async def chat_completions(request: Request):
             pricing_service=pricing_service,
             catwalk_name=catwalk_name,
             costing_model=costing_model,
+            pricing_override=pricing_override,
         )
         logger.info(f"✗ LLM Response: {model} (unknown) | {duration_ms}ms | Error: UnknownModel") # pyright: ignore[reportPossiblyUnboundVariable]
         error_response = build_error_response("invalid_request_error", exc.detail, "model_not_found")
@@ -122,6 +126,7 @@ async def chat_completions(request: Request):
             pricing_service=pricing_service,
             catwalk_name=catwalk_name,
             costing_model=costing_model,
+            pricing_override=pricing_override,
         )
 
     except Exception as exc:
@@ -132,6 +137,7 @@ async def chat_completions(request: Request):
             pricing_service=pricing_service,
             catwalk_name=catwalk_name,
             costing_model=costing_model,
+            pricing_override=pricing_override,
         )
 
 
@@ -144,6 +150,7 @@ async def embeddings(request: Request):
     request_data = await request.json()
     catwalk_name: Optional[str] = None
     costing_model: Optional[str] = None
+    pricing_override: Optional[Dict[str, float]] = None
  
     try:
         # Validate model parameter
@@ -159,7 +166,7 @@ async def embeddings(request: Request):
             return JSONResponse(content=error_response, status_code=400)
 
         # Get pricing parameters before model resolution might fail
-        catwalk_name, costing_model = get_pricing_params(model, request)
+        catwalk_name, costing_model, pricing_override = get_pricing_params(model, request)
 
         # Resolve model configuration and merge with request
         request_data_obj = create_embedding_request(
@@ -183,6 +190,7 @@ async def embeddings(request: Request):
             pricing_service=pricing_service,
             catwalk_name=catwalk_name,
             costing_model=costing_model,
+            pricing_override=pricing_override,
         )
 
     except HTTPException as exc:
@@ -194,6 +202,7 @@ async def embeddings(request: Request):
             pricing_service=pricing_service,
             catwalk_name=catwalk_name,
             costing_model=costing_model,
+            pricing_override=pricing_override,
         )
         logger.info(f"✗ Embedding Response: {model} (unknown) | {duration_ms}ms | Error: UnknownModel") # pyright: ignore[reportPossiblyUnboundVariable]
         error_response = build_error_response("invalid_request_error", exc.detail, "model_not_found")
@@ -207,6 +216,7 @@ async def embeddings(request: Request):
             pricing_service=pricing_service,
             catwalk_name=catwalk_name,
             costing_model=costing_model,
+            pricing_override=pricing_override,
         )
 
     except Exception as exc:
@@ -217,6 +227,7 @@ async def embeddings(request: Request):
             pricing_service=pricing_service,
             catwalk_name=catwalk_name,
             costing_model=costing_model,
+            pricing_override=pricing_override,
         )
 
 

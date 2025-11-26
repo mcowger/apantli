@@ -7,9 +7,8 @@ import asyncio
 import os
 
 import httpx
-import structlog
 
-logger = structlog.get_logger(__name__)
+from apantli.log_config import logger
 
 
 @dataclass
@@ -87,23 +86,23 @@ class CatwalkPricingService:
 
                 total_models = sum(len(models) for models in new_index.values())
                 logger.info(
-                    "pricing_index_updated",
-                    providers=len(new_index),
-                    models=total_models,
+                    "Pricing index updated: %d providers, %d models",
+                    len(new_index),
+                    total_models,
                 )
 
             except httpx.HTTPError as e:
                 logger.error(
-                    "catwalk_fetch_failed",
-                    error=str(e),
-                    url=self._catwalk_url,
-                    has_existing_index=bool(self._pricing_index),
+                    "Catwalk fetch failed: %s, url=%s, has_existing_index=%s",
+                    e,
+                    self._catwalk_url,
+                    bool(self._pricing_index),
                 )
             except (ValueError, TypeError, KeyError) as e:
                 logger.error(
-                    "catwalk_parse_failed",
-                    error=str(e),
-                    url=self._catwalk_url,
+                    "Catwalk parse failed: %s, url=%s",
+                    e,
+                    self._catwalk_url,
                 )
 
     def calculate_cost(
@@ -112,6 +111,7 @@ class CatwalkPricingService:
         costing_model: Optional[str],
         prompt_tokens: int,
         completion_tokens: int,
+        pricing_override: Optional[Dict[str, float]] = None,
     ) -> float:
         """Calculate cost for a completion.
 
@@ -120,45 +120,59 @@ class CatwalkPricingService:
             costing_model: The model ID for costing lookup
             prompt_tokens: Number of input tokens
             completion_tokens: Number of output tokens
+            pricing_override: Optional dict with 'cost_per_1m_in' and 'cost_per_1m_out' to override Catwalk pricing
 
         Returns:
             The calculated cost in dollars.
             Returns 0.0 with a warning log if model or provider not found.
         """
+        # Check for pricing override first
+        if pricing_override is not None:
+            cost_per_1m_in = pricing_override.get('cost_per_1m_in', 0.0)
+            cost_per_1m_out = pricing_override.get('cost_per_1m_out', 0.0)
+            cost = (prompt_tokens * cost_per_1m_in / 1_000_000) + (
+                completion_tokens * cost_per_1m_out / 1_000_000
+            )
+            logger.debug(
+                "Cost calculated with override: cost_per_1m_in=%s, cost_per_1m_out=%s, prompt_tokens=%d, completion_tokens=%d, cost=%s",
+                cost_per_1m_in,
+                cost_per_1m_out,
+                prompt_tokens,
+                completion_tokens,
+                cost,
+            )
+            return cost
+
         if not catwalk_name:
             logger.warning(
-                "pricing_lookup_failed",
-                reason="missing_catwalk_name",
-                costing_model=costing_model,
+                "Pricing lookup failed: missing catwalk_name, costing_model=%s",
+                costing_model,
             )
             return 0.0
 
         if not costing_model:
             logger.warning(
-                "pricing_lookup_failed",
-                reason="missing_costing_model",
-                catwalk_name=catwalk_name,
+                "Pricing lookup failed: missing costing_model, catwalk_name=%s",
+                catwalk_name,
             )
             return 0.0
 
         provider_models = self._pricing_index.get(catwalk_name)
         if provider_models is None:
             logger.warning(
-                "pricing_lookup_failed",
-                reason="provider_not_found",
-                catwalk_name=catwalk_name,
-                costing_model=costing_model,
+                "Pricing lookup failed: provider not found, catwalk_name=%s, costing_model=%s",
+                catwalk_name,
+                costing_model,
             )
             return 0.0
 
         pricing = provider_models.get(costing_model)
         if pricing is None:
             logger.warning(
-                "pricing_lookup_failed",
-                reason="model_not_found",
-                catwalk_name=catwalk_name,
-                costing_model=costing_model,
-                available_models=list(provider_models.keys())[:10],  # Limit for log size
+                "Pricing lookup failed: model not found, catwalk_name=%s, costing_model=%s, available_models=%s",
+                catwalk_name,
+                costing_model,
+                list(provider_models.keys())[:10],
             )
             return 0.0
 
@@ -167,12 +181,12 @@ class CatwalkPricingService:
         )
 
         logger.debug(
-            "cost_calculated",
-            catwalk_name=catwalk_name,
-            costing_model=costing_model,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            cost=cost,
+            "Cost calculated: catwalk_name=%s, costing_model=%s, prompt_tokens=%d, completion_tokens=%d, cost=%s",
+            catwalk_name,
+            costing_model,
+            prompt_tokens,
+            completion_tokens,
+            cost,
         )
 
         return cost
@@ -185,5 +199,5 @@ class CatwalkPricingService:
         """
         while True:
             await asyncio.sleep(self.REFRESH_INTERVAL)
-            logger.info("pricing_refresh_starting")
+            logger.info("Pricing refresh starting")
             await self._fetch_and_build_index()

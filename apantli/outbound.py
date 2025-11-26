@@ -1,7 +1,7 @@
 
 import json
 import time
-from typing import Optional
+from typing import Dict, Optional
 from apantli.database import Database
 from apantli.llm import infer_provider_from_model
 from fastapi import Request
@@ -30,6 +30,7 @@ async def execute_streaming_request(
     pricing_service: Optional["CatwalkPricingService"] = None,
     catwalk_name: Optional[str] = None,
     costing_model: Optional[str] = None,
+    pricing_override: Optional[Dict[str, float]] = None,
 ) -> StreamingResponse:
     """Execute and stream LiteLLM response with logging.
 
@@ -132,6 +133,7 @@ async def execute_streaming_request(
                     pricing_service=pricing_service,
                     catwalk_name=catwalk_name,
                     costing_model=costing_model,
+                    pricing_override=pricing_override,
                 )
 
                 # Log completion
@@ -158,6 +160,7 @@ async def execute_request(
     pricing_service: Optional["CatwalkPricingService"] = None,
     catwalk_name: Optional[str] = None,
     costing_model: Optional[str] = None,
+    pricing_override: Optional[Dict[str, float]] = None,
 ) -> JSONResponse:
     """Execute non-streaming LiteLLM request with logging.
 
@@ -197,6 +200,7 @@ async def execute_request(
         pricing_service=pricing_service,
         catwalk_name=catwalk_name,
         costing_model=costing_model,
+        pricing_override=pricing_override,
     )
 
     # Log completion
@@ -217,6 +221,7 @@ async def handle_llm_error(
     pricing_service: Optional["CatwalkPricingService"] = None,
     catwalk_name: Optional[str] = None,
     costing_model: Optional[str] = None,
+    pricing_override: Optional[Dict[str, float]] = None,
 ) -> JSONResponse:
     """Handle LLM API errors with consistent logging and response formatting."""
     duration_ms = int((time.time() - start_time) * 1000)
@@ -245,6 +250,7 @@ async def handle_llm_error(
         pricing_service=pricing_service,
         catwalk_name=catwalk_name,
         costing_model=costing_model,
+        pricing_override=pricing_override,
     )
 
     # Console log with clean error message
@@ -266,6 +272,7 @@ async def execute_embedding_request(
     pricing_service: Optional["CatwalkPricingService"] = None,
     catwalk_name: Optional[str] = None,
     costing_model: Optional[str] = None,
+    pricing_override: Optional[Dict[str, float]] = None,
 ) -> JSONResponse:
     """Execute non-streaming embedding request with logging.
 
@@ -318,6 +325,7 @@ async def execute_embedding_request(
         pricing_service=pricing_service,
         catwalk_name=catwalk_name,
         costing_model=costing_model,
+        pricing_override=pricing_override,
     )
 
     # Log completion
@@ -336,6 +344,7 @@ async def handle_embedding_error(
     pricing_service: Optional["CatwalkPricingService"] = None,
     catwalk_name: Optional[str] = None,
     costing_model: Optional[str] = None,
+    pricing_override: Optional[Dict[str, float]] = None,
 ) -> JSONResponse:
     """Handle embedding API errors with consistent logging and response formatting."""
     duration_ms = int((time.time() - start_time) * 1000)
@@ -364,6 +373,7 @@ async def handle_embedding_error(
         pricing_service=pricing_service,
         catwalk_name=catwalk_name,
         costing_model=costing_model,
+        pricing_override=pricing_override,
     )
 
     # Console log with clean error message

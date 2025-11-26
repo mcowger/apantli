@@ -6,7 +6,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, UTC
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 from contextlib import asynccontextmanager
 from apantli.types import ChatFunctionCallArgs, EmbeddingFunctionCallArgs
 from apantli.pricing import CatwalkPricingService
@@ -173,6 +173,7 @@ class Database:
       pricing_service: Optional["CatwalkPricingService"] = None,
       catwalk_name: Optional[str] = None,
       costing_model: Optional[str] = None,
+      pricing_override: Optional[Dict[str, float]] = None,
   ):
     """Log a request to SQLite via write queue.
     
@@ -186,6 +187,7 @@ class Database:
         pricing_service: CatwalkPricingService for cost calculation (optional)
         catwalk_name: Provider's catwalk identifier for pricing lookup (optional)
         costing_model: Model ID for costing lookup (optional)
+        pricing_override: Optional dict with 'cost_per_1m_in' and 'cost_per_1m_out' to override Catwalk pricing
     """
     usage = response.get('usage', {}) if response else {}
     prompt_tokens = usage.get('prompt_tokens', 0)
@@ -200,6 +202,7 @@ class Database:
           costing_model=costing_model,
           prompt_tokens=prompt_tokens,
           completion_tokens=completion_tokens,
+          pricing_override=pricing_override,
       )
 
     await self._queue_write("""
