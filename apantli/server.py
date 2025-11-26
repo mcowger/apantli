@@ -6,7 +6,8 @@ Compatible with OpenAI API format, uses LiteLLM SDK for provider routing.
 
 import os
 import argparse
-from apantli.log_config import logger
+import logging.config
+from apantli.log_config import logger, get_uvicorn_config
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
@@ -191,6 +192,9 @@ def main():
     app.state.retries = args.retries
 
     
+    # Configure uvicorn logging to match custom log format
+    logging.config.dictConfig(get_uvicorn_config("info"))
+    
     # Print available URLs
     logger.info(f"🚀 Apantli server starting...")
     logger.info(f"Server at http://{args.host}:{args.port}/ui\n")
@@ -202,6 +206,7 @@ def main():
             host=args.host,
             port=args.port,
             reload=args.reload,
+            log_config=None,  # Use our custom logging config
         )
     else:
         # Production mode can use app object directly
@@ -209,6 +214,7 @@ def main():
             app,
             host=args.host,
             port=args.port,
+            log_config=None,  # Use our custom logging config
         )
 
 
