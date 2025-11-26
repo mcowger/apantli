@@ -1,7 +1,5 @@
 # Multi-architecture build (arm64 and amd64):
-#   docker buildx build --platform linux/arm64,linux/amd64 -t apantli:latest --push .
-#.  podman build --platform linux/amd64 -t target/mcowger/apantli:dev-amd64 .
-#.  podman push target/mcowger/apantli:dev-amd64
+#   docker buildx build --platform linux/amd64 -t apantli:latest --push .
 
 #
 # Single architecture build:
