@@ -4,13 +4,8 @@ import { state } from './state.js'
 import { escapeHtml, copyToClipboard } from './core.js'
 import { sortTable, updateSortIndicators } from './tables.js'
 import {
-  extractContentText,
-  extractConversation,
-  estimateTokens,
-  formatMessageContent,
   renderConversationView,
   renderJsonTree,
-  toggleJson
 } from './utils.js'
 
 // Toggle between conversation and JSON view
