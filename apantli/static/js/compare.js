@@ -472,15 +472,13 @@ function compareApp() {
 
     // Start a new conversation (clear all messages)
     newConversation() {
-      if (confirm('Clear all conversation history?')) {
-        this.slots.forEach(slot => {
-          slot.messages = []
-          slot.conversationModel = null  // Reset so user can change model
-          slot.streaming = false
-          slot.streamingContent = ''
-        })
-        this.saveState()
-      }
+      this.slots.forEach(slot => {
+        slot.messages = []
+        slot.conversationModel = null  // Reset so user can change model
+        slot.streaming = false
+        slot.streamingContent = ''
+      })
+      this.saveState()
     },
 
     // Export all conversations to clipboard as markdown

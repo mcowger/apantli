@@ -217,7 +217,9 @@ def create_embedding_request(model: str, request_data: dict, request: Request) -
         call_request.extra_headers = provider_config.headers
     
     # Set custom_llm_provider to prevent LiteLLM from printing "Provider List" warnings
-    if provider_config.custom_llm_provider:
+    if model_config.custom_llm_provider:
+        call_request.custom_llm_provider = model_config.custom_llm_provider
+    elif provider_config.custom_llm_provider:
         call_request.custom_llm_provider = provider_config.custom_llm_provider
     
     return call_request

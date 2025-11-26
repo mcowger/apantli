@@ -35,6 +35,7 @@ class ModelConfig(BaseModel):
   litellm_model: str = Field(..., description="LiteLLM model identifier")
   provider_name: str = Field(..., description="key for provider info lookup")
   costing_model: Optional[str] = Field(..., alias="costing_model", description="Identifier used for model capability & costing lookups")
+  custom_llm_provider: Optional[str] =  Field(None,description="override for custom llm provider")
   temperature: Optional[float] = None
   context_window: Optional[int] = None
   litellm_params: Dict[str, Any] = Field(
@@ -123,7 +124,8 @@ class Config:
             costing_model=model_value.get('costing_model'),
             context_window=model_value.get('context_window'),
             litellm_params=litellm_params,
-            provider_name=model_value.get("provider_name")
+            provider_name=model_value.get("provider_name"),
+            custom_llm_provider=model_value.get("custom_llm_provider")
           )
 
           models[model_name] = model_config
