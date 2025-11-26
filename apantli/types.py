@@ -61,6 +61,7 @@ class ChatFunctionCallArgs(BaseModel):
     base_url: Optional[str] = None
     api_version: Optional[str] = None
     api_key: Optional[str] = None
+    custom_llm_provider: Optional[str] = None
 
     # LiteLLM function params
     thinking: Optional[AnthropicThinkingParam] = None

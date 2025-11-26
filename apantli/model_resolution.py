@@ -103,6 +103,10 @@ def create_completion_request(model: str, request_data: dict, request: Request) 
     if provider_config.headers:
         call_request.extra_headers = provider_config.headers
     
+    # Set custom_llm_provider to prevent LiteLLM from trying to parse the model name
+    if provider_config.custom_llm_provider:
+        call_request.custom_llm_provider = provider_config.custom_llm_provider
+    
     return call_request
 
 
