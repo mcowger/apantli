@@ -84,8 +84,10 @@ def create_completion_request(model: str, request_data: dict, request: Request) 
 
     # Pass through all other litellm_params (timeout, num_retries, temperature, etc.)
     # Config provides defaults; client values (except null) always win
+    # Exclude configuration fields that should not be in the request payload
+    excluded_params = ('model', 'api_key', 'base_url', 'custom_llm_provider')
     for key, value in model_config.litellm_params.items():
-        if key not in ('model', 'api_key'):
+        if key not in excluded_params:
             # Use config value only if client didn't provide, or provided None/null
             # This allows: config defaults, client override, null → use config
             current_value = getattr(call_request, key, None)
@@ -193,8 +195,10 @@ def create_embedding_request(model: str, request_data: dict, request: Request) -
 
     # Pass through all other litellm_params (timeout, etc.)
     # Config provides defaults; client values (except null) always win
+    # Exclude configuration fields that should not be in the request payload
+    excluded_params = ('model', 'api_key', 'api_base', 'base_url', 'custom_llm_provider')
     for key, value in model_config.litellm_params.items():
-        if key not in ('model', 'api_key'):
+        if key not in excluded_params:
             # Use config value only if client didn't provide, or provided None/null
             # This allows: config defaults, client override, null → use config
             current_value = getattr(call_request, key, None)
