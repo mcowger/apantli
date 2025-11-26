@@ -224,7 +224,7 @@ def main():
     
     # Print available URLs
     logger.info(f"🚀 Apantli server starting...")
-    logger.info(f"Server at http://{args.host}:{args.port}/ui\n")
+    logger.info(f"Server at http://{args.host}:{args.port}/ui")
 
     if args.reload:
         # Reload mode requires import string
