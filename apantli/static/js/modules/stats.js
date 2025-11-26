@@ -36,91 +36,29 @@ export async function refreshStats(alpineData, renderProviderTrends) {
     </div>
   `
 
-  // Provider breakdown visualization with model segments
-  const totalCost = data.totals.cost
+  // By model - convert to sortable format and merge with performance data
+  const performanceMap = new Map((data.performance || []).map(p => [p.model, p]))
 
-  let providerHtml = ''
-  if (data.by_model.length > 0 && totalCost > 0) {
-    // Group models by provider
-    const modelsByProvider = {}
-    data.by_model.forEach(m => {
-      if (!modelsByProvider[m.provider]) {
-        modelsByProvider[m.provider] = []
-      }
-      modelsByProvider[m.provider].push(m)
-    })
+  state.byModelData = data.by_model.map(m => {
+    const perf = performanceMap.get(m.model)
+    return [
+      m.model,                                    // 0: model
+      m.requests,                                 // 1: requests
+      m.cost,                                     // 2: cost
+      m.tokens,                                   // 3: tokens
+      m.cost / m.requests,                        // 4: avg cost per request
+      m.tokens / m.requests,                      // 5: avg tokens per request
+      perf ? perf.avg_tokens_per_sec : null,      // 6: speed (tokens/sec)
+      perf ? perf.avg_duration_ms : null          // 7: avg duration
+    ]
+  })
 
-    // Sort providers by total cost
-    const providerTotals = Object.entries(modelsByProvider).map(([provider, models]) => ({
-      provider,
-      models,
-      totalCost: models.reduce((sum, m) => sum + m.cost, 0),
-      totalRequests: models.reduce((sum, m) => sum + m.requests, 0)
-    })).sort((a, b) => b.totalCost - a.totalCost)
-
-    providerHtml = providerTotals.map(p => {
-      const providerPercentage = (p.totalCost / totalCost * 100)
-
-      // Sort models by cost within provider and assign colors
-      const sortedModels = p.models.sort((a, b) => b.cost - a.cost)
-      sortedModels.forEach((m, index) => {
-        m.color = getModelColor(p.provider, index, sortedModels.length)
-      })
-
-      // Create segmented bar
-      const segments = sortedModels.map(m => {
-        const modelPercentage = (m.cost / totalCost * 100)
-        const modelLabel = escapeHtml(m.model)
-        return `<div class="bar-segment" style="width: ${modelPercentage}%; background: ${m.color}; cursor: pointer;"
-                     onmouseover="window.showChartTooltip(event, '${p.provider}', '${modelLabel}', ${m.cost})"
-                     onmouseout="window.hideChartTooltip()"></div>`
-      }).join('')
-
-      // Model details list
-      const modelDetails = sortedModels.map(m =>
-        `<span style="color: ${m.color};">●</span> ${escapeHtml(m.model)}: $${m.cost.toFixed(4)} (${m.requests} req)`
-      ).join(' • ')
-
-      return `
-        <div class="provider-bar">
-          <div class="provider-header">
-            <span class="provider-name">${p.provider}</span>
-            <span class="provider-percentage">${providerPercentage.toFixed(0)}%</span>
-          </div>
-          <div class="bar-container">
-            ${segments}
-          </div>
-          <div class="provider-details">
-            $${p.totalCost.toFixed(4)} across ${p.totalRequests} requests ($${(p.totalCost / p.totalRequests).toFixed(4)} per request)
-          </div>
-          <div class="provider-details" style="font-size: 11px; margin-top: 4px;">
-            ${modelDetails}
-          </div>
-        </div>
-      `
-    }).join('')
-
-    providerHtml += `<div style="margin-top: 20px; font-weight: bold;">Total: $${totalCost.toFixed(4)} (${data.totals.requests} requests)</div>`
-  } else {
-    providerHtml = '<div style="color: #666;">No data available</div>'
-  }
-
-  document.getElementById('provider-breakdown').innerHTML = providerHtml
-
-  // By model - convert to sortable format
-  state.byModelData = data.by_model.map(m => [m.model, m.requests, m.cost, m.tokens])
   if (!state.tableSortState['by-model']) {
     state.tableSortState['by-model'] = { column: null, direction: null, originalData: [...state.byModelData] }
   } else {
     state.tableSortState['by-model'].originalData = [...state.byModelData]
   }
   renderByModelTable(applySortIfNeeded('by-model', state.byModelData), state.tableSortState['by-model'])
-
-  // Model efficiency
-  renderModelEfficiency(state.byModelData)
-
-  // Model performance (speed)
-  renderModelPerformance(data.performance || [])
 
   // By provider - convert to sortable format
   state.byProviderData = data.by_provider.map(p => [p.provider, p.requests, p.cost, p.tokens])
@@ -159,163 +97,57 @@ export function sortByModelTable(columnIndex) {
 
 // Render by model table
 function renderByModelTable(data, sortState) {
+  // Find best performers
+  const validCostPerRequest = data.filter(r => r[4] != null)
+  const validTokensPerRequest = data.filter(r => r[5] != null)
+  const validSpeed = data.filter(r => r[6] != null)
+
+  const mostEconomical = validCostPerRequest.length > 0
+    ? validCostPerRequest.reduce((min, curr) => curr[4] < min[4] ? curr : min)[0]
+    : null
+  const mostTokenRich = validTokensPerRequest.length > 0
+    ? validTokensPerRequest.reduce((max, curr) => curr[5] > max[5] ? curr : max)[0]
+    : null
+  const fastest = validSpeed.length > 0
+    ? validSpeed.reduce((max, curr) => curr[6] > max[6] ? curr : max)[0]
+    : null
+
   const table = document.getElementById('by-model')
   table.innerHTML = `
     <thead>
       <tr>
         <th class="sortable" onclick="window.sortByModelTable(0)">Model</th>
         <th class="sortable" onclick="window.sortByModelTable(1)">Requests</th>
-        <th class="sortable" onclick="window.sortByModelTable(2)">Cost</th>
+        <th class="sortable" onclick="window.sortByModelTable(2)">Total Cost</th>
         <th class="sortable" onclick="window.sortByModelTable(3)">Tokens</th>
+        <th class="sortable" onclick="window.sortByModelTable(4)">$/Request</th>
+        <th class="sortable" onclick="window.sortByModelTable(5)">Tokens/Req</th>
+        <th class="sortable" onclick="window.sortByModelTable(6)">Speed</th>
+        <th class="sortable" onclick="window.sortByModelTable(7)">Duration</th>
       </tr>
     </thead>
     <tbody>
-      ${data.map(row => `
+      ${data.map(row => {
+        const badges = []
+        if (row[0] === mostEconomical) badges.push('<span class="badge badge-economical" onmouseover="window.showChartTooltip(event, \'Most Economical\', \'Lowest cost per request\', null)" onmouseout="window.hideChartTooltip()">$</span>')
+        if (row[0] === mostTokenRich) badges.push('<span class="badge badge-tokens" onmouseover="window.showChartTooltip(event, \'Most Token-Rich\', \'Highest tokens per request\', null)" onmouseout="window.hideChartTooltip()">▰</span>')
+        if (row[0] === fastest) badges.push('<span class="badge badge-speed" onmouseover="window.showChartTooltip(event, \'Fastest\', \'Highest tokens per second\', null)" onmouseout="window.hideChartTooltip()">⚡︎</span>')
+
+        return `
         <tr class="clickable-row" onclick="window.filterRequests({ model: '${escapeHtml(row[0])}', provider: '', search: '', minCost: '', maxCost: '' })">
-          <td>${row[0]}</td>
+          <td>${escapeHtml(row[0])} ${badges.join(' ')}</td>
           <td>${row[1]}</td>
           <td>$${row[2].toFixed(4)}</td>
           <td>${row[3].toLocaleString()}</td>
+          <td>$${row[4].toFixed(4)}</td>
+          <td>${Math.round(row[5]).toLocaleString()}</td>
+          <td>${row[6] != null ? row[6].toFixed(1) + ' tok/s' : '—'}</td>
+          <td>${row[7] != null ? Math.round(row[7]) + 'ms' : '—'}</td>
         </tr>
-      `).join('')}
+      `}).join('')}
     </tbody>
   `
   updateSortIndicators(table, sortState)
-}
-
-// Render model efficiency metrics
-function renderModelEfficiency(modelData) {
-  const container = document.getElementById('model-efficiency')
-
-  if (!modelData || modelData.length === 0) {
-    container.innerHTML = '<div class="chart-empty">No model data available</div>'
-    return
-  }
-
-  // Calculate efficiency metrics
-  const efficiencyData = modelData.map(row => ({
-    model: row[0],
-    requests: row[1],
-    cost: row[2],
-    tokens: row[3],
-    avgCostPerRequest: row[2] / row[1],
-    avgTokensPerRequest: row[3] / row[1]
-  }))
-
-  // Find most economical (lowest avg cost)
-  const mostEconomical = efficiencyData.reduce((min, curr) =>
-    curr.avgCostPerRequest < min.avgCostPerRequest ? curr : min
-  )
-
-  // Find most token-rich (highest avg tokens)
-  const mostTokenRich = efficiencyData.reduce((max, curr) =>
-    curr.avgTokensPerRequest > max.avgTokensPerRequest ? curr : max
-  )
-
-  // Render efficiency cards
-  const cards = efficiencyData.map(data => {
-    const isEconomical = data.model === mostEconomical.model
-    const isTokenRich = data.model === mostTokenRich.model
-    const highlightClass = isEconomical ? 'highlight-economical' : (isTokenRich ? 'highlight-tokens' : '')
-
-    return `
-      <div class="efficiency-card ${highlightClass}">
-        <div class="efficiency-model-name">
-          ${data.model}
-          ${isEconomical ? '<span class="efficiency-badge economical">Most Economical</span>' : ''}
-          ${isTokenRich ? '<span class="efficiency-badge token-rich">Most Token-Rich</span>' : ''}
-        </div>
-        <div class="efficiency-metrics">
-          <div class="efficiency-metric">
-            <div class="efficiency-metric-label">Avg Cost/Request</div>
-            <div class="efficiency-metric-value">$${data.avgCostPerRequest.toFixed(4)}</div>
-          </div>
-          <div class="efficiency-metric">
-            <div class="efficiency-metric-label">Avg Tokens/Request</div>
-            <div class="efficiency-metric-value">${Math.round(data.avgTokensPerRequest).toLocaleString()}</div>
-          </div>
-          <div class="efficiency-metric">
-            <div class="efficiency-metric-label">Total Requests</div>
-            <div class="efficiency-metric-value">${data.requests.toLocaleString()}</div>
-          </div>
-          <div class="efficiency-metric">
-            <div class="efficiency-metric-label">Total Cost</div>
-            <div class="efficiency-metric-value">$${data.cost.toFixed(4)}</div>
-          </div>
-        </div>
-      </div>
-    `
-  }).join('')
-
-  container.innerHTML = `
-    <div class="efficiency-grid">
-      ${cards}
-    </div>
-    <div class="efficiency-summary">
-      Most economical: <strong>${mostEconomical.model}</strong> at $${mostEconomical.avgCostPerRequest.toFixed(4)}/request
-      &nbsp;•&nbsp;
-      Most token-rich: <strong>${mostTokenRich.model}</strong> at ${Math.round(mostTokenRich.avgTokensPerRequest).toLocaleString()} tokens/request
-    </div>
-  `
-}
-
-// Render model performance (speed) metrics
-function renderModelPerformance(performanceData) {
-  const container = document.getElementById('model-performance')
-
-  if (!performanceData || performanceData.length === 0) {
-    container.innerHTML = '<div class="chart-empty">No performance data available (requires requests with completion tokens)</div>'
-    return
-  }
-
-  // Find fastest model
-  const fastest = performanceData.reduce((max, curr) =>
-    curr.avg_tokens_per_sec > max.avg_tokens_per_sec ? curr : max
-  )
-
-  // Render performance cards
-  const cards = performanceData.map(data => {
-    const isFastest = data.model === fastest.model
-    const highlightClass = isFastest ? 'highlight-tokens' : ''
-
-    return `
-      <div class="efficiency-card ${highlightClass}">
-        <div class="efficiency-model-name">
-          ${data.model}
-          ${isFastest ? '<span class="efficiency-badge token-rich">Fastest</span>' : ''}
-        </div>
-        <div class="efficiency-metrics">
-          <div class="efficiency-metric">
-            <div class="efficiency-metric-label">Avg Speed</div>
-            <div class="efficiency-metric-value">${data.avg_tokens_per_sec.toFixed(1)} tok/s</div>
-          </div>
-          <div class="efficiency-metric">
-            <div class="efficiency-metric-label">Speed Range</div>
-            <div class="efficiency-metric-value">${data.min_tokens_per_sec.toFixed(1)} - ${data.max_tokens_per_sec.toFixed(1)}</div>
-          </div>
-          <div class="efficiency-metric">
-            <div class="efficiency-metric-label">Avg Duration</div>
-            <div class="efficiency-metric-value">${Math.round(data.avg_duration_ms)}ms</div>
-          </div>
-          <div class="efficiency-metric">
-            <div class="efficiency-metric-label">Requests Measured</div>
-            <div class="efficiency-metric-value">${data.requests.toLocaleString()}</div>
-          </div>
-        </div>
-      </div>
-    `
-  }).join('')
-
-  container.innerHTML = `
-    <div class="efficiency-grid">
-      ${cards}
-    </div>
-    <div class="efficiency-summary">
-      Fastest: <strong>${fastest.model}</strong> at ${fastest.avg_tokens_per_sec.toFixed(1)} tokens/second
-      &nbsp;•&nbsp;
-      Note: Duration includes network latency and prompt processing time
-    </div>
-  `
 }
 
 // Sort by provider table

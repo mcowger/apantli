@@ -39,15 +39,23 @@ export function formatDate(date) {
 }
 
 export function getCostColor(cost, maxCost) {
-  if (cost === 0) return 'var(--color-text-secondary)'
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
 
-  const ratio = cost / maxCost
-  if (ratio < 0.33) {
-    return '#22c55e'
-  } else if (ratio < 0.67) {
-    return '#f59e0b'
+  if (cost === 0) {
+    return isDark ? '#2a2a2a' : '#f0f0f0'
+  }
+
+  const ratio = Math.min(cost / (maxCost || 1), 1)
+
+  if (isDark) {
+    // Dark mode: darker blues with less saturation
+    const lightness = 25 + (ratio * 25) // 25% to 50%
+    const saturation = 60 + (ratio * 20) // 60% to 80%
+    return `hsl(210, ${saturation}%, ${lightness}%)`
   } else {
-    return '#ef4444'
+    // Light mode: lighter blues
+    const lightness = 100 - (ratio * 50) // 100% to 50%
+    return `hsl(210, 100%, ${lightness}%)`
   }
 }
 
@@ -63,23 +71,35 @@ export function copyToClipboard(text, button) {
   })
 }
 
-export function getProviderColor(provider) {
-  const colors = {
-    'openai': '#10a37f',
-    'anthropic': '#d4a574',
-    'google': '#4285f4',
-    'meta': '#0467df',
-    'mistral': '#ff7000',
-    'unknown': '#999999'
-  }
-  return colors[provider.toLowerCase()] || colors['unknown']
+// Provider colors (shared with bar chart)
+const PROVIDER_COLORS = {
+  'openai': '#10a37f',
+  'anthropic': '#d97757',
+  'google': '#4285f4',
+  'default': '#999999'
 }
 
+export function getProviderColor(provider) {
+  return PROVIDER_COLORS[provider] || PROVIDER_COLORS.default
+}
+
+// Generate color tints for models within a provider
 export function getModelColor(provider, modelIndex, totalModels) {
   const baseColor = getProviderColor(provider)
 
-  if (totalModels === 1) return baseColor
+  // Parse hex color to RGB
+  const r = parseInt(baseColor.slice(1, 3), 16)
+  const g = parseInt(baseColor.slice(3, 5), 16)
+  const b = parseInt(baseColor.slice(5, 7), 16)
 
-  const opacity = 1.0 - (modelIndex * 0.3 / totalModels)
-  return baseColor + Math.floor(opacity * 255).toString(16).padStart(2, '0')
+  // Generate tint: darker for first model, lighter for subsequent
+  // Lightness range: 0% (darkest) to 75% (lightest)
+  const lightness = totalModels === 1 ? 0 : (modelIndex / (totalModels - 1)) * 0.75
+
+  // Mix with white to create tint
+  const nr = Math.round(r + (255 - r) * lightness)
+  const ng = Math.round(g + (255 - g) * lightness)
+  const nb = Math.round(b + (255 - b) * lightness)
+
+  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`
 }
