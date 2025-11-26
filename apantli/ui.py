@@ -28,7 +28,7 @@ async def compare_page(request: Request):
         "compare.html",
         {
             "request": request,
-            "models": list(request.app.state.model_map.keys()),
+            "models": list(request.app.state.config.models.keys()),
             "token": api_token
         }
     )
