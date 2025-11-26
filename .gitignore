@@ -10,3 +10,5 @@ config.yaml
 config.json
 config.jsonc
 .pytest_cache
+requests.db-wal
+requests.db-shm

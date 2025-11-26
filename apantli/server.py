@@ -39,11 +39,13 @@ async def lifespan(app: FastAPI):
     config = Config(config_path)
     app.state.config = config
 
-    # Initialize database
+    # Initialize database with write queue
     db = Database(db_path)
     await db.init()
     app.state.db = db
     yield
+    # Shutdown: close database write queue
+    await db.close()
     
 app = FastAPI(title="LLM Proxy", lifespan=lifespan)
 

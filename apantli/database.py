@@ -1,13 +1,17 @@
 """Database operations for SQLite request logging."""
 
+import asyncio
 import aiosqlite
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, UTC
 from typing import Optional, Union
 from contextlib import asynccontextmanager
 from apantli.types import ChatFunctionCallArgs, EmbeddingFunctionCallArgs
 import litellm
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -30,24 +34,81 @@ class RequestFilter:
 
 
 class Database:
-  """Async database interface for request logging."""
+  """Async database interface for request logging with write queue."""
 
   def __init__(self, path: str):
     self.path = path
+    self._write_queue: asyncio.Queue = asyncio.Queue()
+    self._write_task: Optional[asyncio.Task] = None
+    self._write_conn: Optional[aiosqlite.Connection] = None
+    self._running = False
 
   @asynccontextmanager
-  async def _get_connection(self):
-    """Context manager for database connections."""
+  async def _get_read_connection(self):
+    """Context manager for read-only database connections."""
     conn = await aiosqlite.connect(self.path)
     try:
+      # Set to read-only mode for better concurrency
+      await conn.execute("PRAGMA query_only = ON")
       yield conn
-      await conn.commit()
     finally:
       await conn.close()
 
+  async def _write_worker(self):
+    """Background worker that processes write operations sequentially."""
+    logger.info("Database write worker started")
+    self._write_conn = await aiosqlite.connect(self.path)
+    # Enable WAL mode for better concurrency
+    await self._write_conn.execute("PRAGMA journal_mode = WAL")
+    await self._write_conn.execute("PRAGMA synchronous = NORMAL")
+    await self._write_conn.execute("PRAGMA busy_timeout = 5000")
+    await self._write_conn.commit()
+    
+    while self._running:
+      try:
+        # Wait for write operation with timeout to allow clean shutdown
+        try:
+          sql, params, future = await asyncio.wait_for(
+            self._write_queue.get(), timeout=1.0
+          )
+        except asyncio.TimeoutError:
+          continue
+        
+        try:
+          cursor = await self._write_conn.execute(sql, params)
+          await self._write_conn.commit()
+          future.set_result(cursor.rowcount)
+        except Exception as e:
+          logger.error(f"Database write error: {e}")
+          future.set_exception(e)
+        finally:
+          self._write_queue.task_done()
+          
+      except asyncio.CancelledError:
+        break
+      except Exception as e:
+        logger.error(f"Write worker error: {e}")
+    
+    if self._write_conn:
+      await self._write_conn.close()
+    logger.info("Database write worker stopped")
+
+  async def _queue_write(self, sql: str, params: tuple) -> int:
+    """Queue a write operation and wait for completion."""
+    future: asyncio.Future = asyncio.get_event_loop().create_future()
+    await self._write_queue.put((sql, params, future))
+    return await future
+
   async def init(self):
-    """Initialize SQLite database with requests table."""
-    async with self._get_connection() as conn:
+    """Initialize SQLite database with requests table and start write worker."""
+    # Create initial connection to set up schema
+    conn = await aiosqlite.connect(self.path)
+    try:
+      # Enable WAL mode
+      await conn.execute("PRAGMA journal_mode = WAL")
+      await conn.execute("PRAGMA synchronous = NORMAL")
+      await conn.execute("PRAGMA busy_timeout = 5000")
+      
       await conn.execute("""
         CREATE TABLE IF NOT EXISTS requests (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,43 +141,62 @@ class Database:
         ON requests(cost)
         WHERE error IS NULL
       """)
+      await conn.commit()
+    finally:
+      await conn.close()
+    
+    # Start write worker
+    self._running = True
+    self._write_task = asyncio.create_task(self._write_worker())
+
+  async def close(self):
+    """Shutdown the database write worker gracefully."""
+    self._running = False
+    if self._write_task:
+      # Wait for queue to drain
+      await self._write_queue.join()
+      self._write_task.cancel()
+      try:
+        await self._write_task
+      except asyncio.CancelledError:
+        pass
+    logger.info("Database closed")
 
   async def log_request(self, model: str, provider: str, response: Optional[dict],
                        duration_ms: int, request_data: Union[ChatFunctionCallArgs, EmbeddingFunctionCallArgs],
                        error: Optional[str] = None):
-    """Log a request to SQLite."""
-    async with self._get_connection() as conn:
-      usage = response.get('usage', {}) if response else {}
-      prompt_tokens = usage.get('prompt_tokens', 0)
-      completion_tokens = usage.get('completion_tokens', 0)
-      total_tokens = usage.get('total_tokens', 0)
+    """Log a request to SQLite via write queue."""
+    usage = response.get('usage', {}) if response else {}
+    prompt_tokens = usage.get('prompt_tokens', 0)
+    completion_tokens = usage.get('completion_tokens', 0)
+    total_tokens = usage.get('total_tokens', 0)
 
-      # Calculate cost using LiteLLM
-      cost = 0.0
-      if response:
-        try:
-          cost = litellm.completion_cost(completion_response=response) # pyright: ignore[reportPrivateImportUsage]
-        except Exception:
-          pass
+    # Calculate cost using LiteLLM
+    cost = 0.0
+    if response:
+      try:
+        cost = litellm.completion_cost(completion_response=response) # pyright: ignore[reportPrivateImportUsage]
+      except Exception:
+        pass
 
-      await conn.execute("""
-        INSERT INTO requests
-        (timestamp, model, provider, prompt_tokens, completion_tokens, total_tokens,
-         cost, duration_ms, request_data, response_data, error)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      """, (
-        datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
-        model,
-        provider,
-        prompt_tokens,
-        completion_tokens,
-        total_tokens,
-        cost,
-        duration_ms,
-        json.dumps(request_data.to_dict()),
-        json.dumps(response) if response else None,
-        error
-      ))
+    await self._queue_write("""
+      INSERT INTO requests
+      (timestamp, model, provider, prompt_tokens, completion_tokens, total_tokens,
+       cost, duration_ms, request_data, response_data, error)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+      datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
+      model,
+      provider,
+      prompt_tokens,
+      completion_tokens,
+      total_tokens,
+      cost,
+      duration_ms,
+      json.dumps(request_data.to_dict()),
+      json.dumps(response) if response else None,
+      error
+    ))
 
   async def get_requests(self, filters: RequestFilter):
     """Get requests with filtering and pagination.
@@ -127,7 +207,7 @@ class Database:
     Returns:
       Dict with requests array, total count, aggregates, and pagination info
     """
-    async with self._get_connection() as conn:
+    async with self._get_read_connection() as conn:
       # Build attribute filters
       where_conditions = []
       params: list = list(filters.time_params or [])  # Start with time filter params
@@ -221,7 +301,7 @@ class Database:
     if time_params is None:
       time_params = []
 
-    async with self._get_connection() as conn:
+    async with self._get_read_connection() as conn:
       # Total stats
       cursor = await conn.execute(f"""
         SELECT
@@ -344,7 +424,7 @@ class Database:
     if where_params is None:
       where_params = []
 
-    async with self._get_connection() as conn:
+    async with self._get_read_connection() as conn:
       cursor = await conn.execute(f"""
         SELECT
           {date_expr} as date,
@@ -415,7 +495,7 @@ class Database:
     if where_params is None:
       where_params = []
 
-    async with self._get_connection() as conn:
+    async with self._get_read_connection() as conn:
       cursor = await conn.execute(f"""
         SELECT
           {hour_expr} as hour,
@@ -477,9 +557,7 @@ class Database:
     Returns:
       Number of deleted records
     """
-    async with self._get_connection() as conn:
-      cursor = await conn.execute("DELETE FROM requests WHERE error IS NOT NULL")
-      return cursor.rowcount
+    return await self._queue_write("DELETE FROM requests WHERE error IS NOT NULL", ())
 
   async def get_date_range(self):
     """Get the actual date range of data in the database.
@@ -487,7 +565,7 @@ class Database:
     Returns:
       Dict with start_date and end_date (None values if no data)
     """
-    async with self._get_connection() as conn:
+    async with self._get_read_connection() as conn:
       cursor = await conn.execute("""
         SELECT MIN(DATE(timestamp)), MAX(DATE(timestamp))
         FROM requests
