@@ -6,7 +6,6 @@ import { toggleJson } from './utils.js'
 import { loadModels, sortModelsTable } from './models.js'
 import { loadRequests, toggleDetailView, toggleDetail, sortRequestsTable } from './requests.js'
 import { refreshStats, filterRequests, sortByModelTable, sortByProviderTable, sortErrorsTable, clearErrors } from './stats.js'
-import { loadCalendar, navigateMonth, handleCalendarKeyPress, onDayClick } from './calendar.js'
 import { showChartTooltip, hideChartTooltip, renderProviderTrends } from './charts.js'
 
 // Alpine data reference
@@ -15,7 +14,6 @@ let alpineData = null
 // Tab change handler
 function onTabChange(tab) {
   if (tab === 'stats') refreshStats(alpineData, () => renderProviderTrends(alpineData))
-  if (tab === 'calendar') loadCalendar()
   if (tab === 'models') loadModels()
   if (tab === 'requests') loadRequests(alpineData)
 }
@@ -58,7 +56,7 @@ setInterval(() => {
 window.addEventListener('popstate', () => {
   if (!alpineData) return
   const hash = window.location.hash.slice(1)
-  if (hash && ['stats', 'calendar', 'models', 'requests'].includes(hash)) {
+  if (hash && ['stats', 'models', 'requests'].includes(hash)) {
     alpineData.currentTab = hash
   } else if (!hash) {
     // No hash means navigate to default (stats)
@@ -85,10 +83,6 @@ window.sortByModelTable = sortByModelTable
 window.sortByProviderTable = sortByProviderTable
 window.sortErrorsTable = sortErrorsTable
 window.clearErrors = () => clearErrors(() => refreshStats(alpineData, () => renderProviderTrends(alpineData)))
-window.loadCalendar = loadCalendar
-window.navigateMonth = navigateMonth
-window.handleCalendarKeyPress = handleCalendarKeyPress
-window.onDayClick = onDayClick
 window.showChartTooltip = showChartTooltip
 window.hideChartTooltip = hideChartTooltip
 window.onTabChange = onTabChange
@@ -117,10 +111,6 @@ export {
   sortByProviderTable,
   sortErrorsTable,
   clearErrors,
-  loadCalendar,
-  navigateMonth,
-  handleCalendarKeyPress,
-  onDayClick,
   showChartTooltip,
   hideChartTooltip,
   renderProviderTrends

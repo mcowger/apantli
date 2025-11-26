@@ -222,7 +222,7 @@
 
     // Initialize tab from URL hash if present
     const initialHash = window.location.hash.slice(1);
-    if (initialHash && ['stats', 'calendar', 'models', 'requests'].includes(initialHash)) {
+    if (initialHash && ['stats', 'models', 'requests'].includes(initialHash)) {
         currentTab = initialHash;
     }
 
@@ -235,12 +235,6 @@
         }
     });
 
-    $watch('theme', value => {
-        // Reload calendar when theme changes to update colors
-        if (currentTab === 'calendar') {
-            loadCalendar();
-        }
-    });
 
     // Watch font settings and apply when they change (including on initial load from $persist)
     $watch('selectedFont', value => {
@@ -334,7 +328,6 @@
                 <h1 class="header-title">apantli ≈ dashboard</h1>
                 <nav class="header-nav">
                     <a href="#stats" :class="{ 'active': currentTab === 'stats' }" @click.prevent="currentTab = 'stats'">Stats</a>
-                    <a href="#calendar" :class="{ 'active': currentTab === 'calendar' }" @click.prevent="currentTab = 'calendar'">Calendar</a>
                     <a href="#models" :class="{ 'active': currentTab === 'models' }" @click.prevent="currentTab = 'models'">Models</a>
                     <a href="#requests" :class="{ 'active': currentTab === 'requests' }" @click.prevent="currentTab = 'requests'">Requests</a>
                 </nav>
@@ -385,19 +378,6 @@
                 <table id="errors"></table>
             </div>
         </details>
-    </div>
-
-    <div id="calendar-tab" x-show="currentTab === 'calendar'">
-        <div class="calendar-header">
-            <button id="prev-month" onclick="navigateMonth(-1)" aria-label="Previous month">←</button>
-            <h2 id="current-month"></h2>
-            <button id="next-month" onclick="navigateMonth(1)" aria-label="Next month">→</button>
-        </div>
-        <div class="calendar-grid" id="calendar-grid" role="grid" aria-label="Monthly calendar"></div>
-        <div id="day-detail" style="display:none" role="region" aria-live="polite">
-            <h3 id="day-detail-title"></h3>
-            <div id="day-detail-content"></div>
-        </div>
     </div>
 
     <div id="models-tab" x-show="currentTab === 'models'">

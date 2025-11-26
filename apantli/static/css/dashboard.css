@@ -709,115 +709,6 @@
             padding: 0 var(--spacing-sm) var(--spacing-sm) var(--spacing-sm);
         }
 
-        /* Calendar styles */
-        .calendar-header {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
-            margin: 20px 0;
-        }
-
-        .calendar-header button {
-            padding: 8px 16px;
-            font-size: 18px;
-            cursor: pointer;
-            border: 1px solid var(--color-border);
-            background: var(--color-background-secondary);
-            color: var(--color-text);
-            border-radius: 4px;
-        }
-
-        .calendar-header button:hover {
-            background: var(--color-hover);
-        }
-
-        .calendar-header h2 {
-            margin: 0;
-            min-width: 200px;
-            text-align: center;
-            color: var(--color-text);
-        }
-
-        .calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 2px;
-            margin: 20px 0;
-        }
-
-        .calendar-day-header {
-            padding: 10px;
-            text-align: center;
-            font-weight: bold;
-            background: var(--color-background-tertiary);
-            border: 1px solid var(--color-border);
-            color: var(--color-text);
-        }
-
-        .calendar-day {
-            aspect-ratio: 1;
-            padding: 8px;
-            border: 1px solid var(--color-border);
-            cursor: pointer;
-            transition: transform 0.1s, box-shadow 0.1s;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            min-height: 80px;
-        }
-
-        .calendar-day:hover {
-            transform: scale(1.05);
-            box-shadow: 0 2px 8px var(--color-shadow);
-        }
-
-        .calendar-day.today {
-            border: 2px solid var(--color-primary);
-        }
-
-        .calendar-day.empty {
-            background: var(--color-background-secondary);
-            cursor: default;
-        }
-
-        .calendar-day.empty:hover {
-            transform: none;
-            box-shadow: none;
-        }
-
-        .day-number {
-            font-size: 14px;
-            font-weight: bold;
-            color: var(--color-text);
-        }
-
-        .day-cost {
-            font-size: 12px;
-            font-weight: bold;
-            color: var(--color-text);
-            margin: 4px 0;
-        }
-
-        .day-requests {
-            font-size: 10px;
-            color: var(--color-text-secondary);
-        }
-
-        #day-detail {
-            margin-top: 30px;
-            padding: 20px;
-            background: var(--color-background-secondary);
-            border: 1px solid var(--color-border);
-            border-radius: 4px;
-        }
-
-        #day-detail h3 {
-            margin-top: 0;
-            color: var(--color-text);
-        }
-
         .provider-bar {
             margin: var(--spacing-sm) 0;
         }
@@ -1361,8 +1252,7 @@
         button:focus,
         input:focus,
         select:focus,
-        a:focus,
-        .calendar-day:focus {
+        a:focus {
             outline: 2px solid var(--color-primary);
             outline-offset: 2px;
         }
@@ -1370,8 +1260,7 @@
         button:focus:not(:focus-visible),
         input:focus:not(:focus-visible),
         select:focus:not(:focus-visible),
-        a:focus:not(:focus-visible),
-        .calendar-day:focus:not(:focus-visible) {
+        a:focus:not(:focus-visible) {
             outline: none;
         }
 
@@ -1428,23 +1317,6 @@
 
             th, td {
                 padding: 4px;
-            }
-
-            .calendar-grid {
-                gap: 1px;
-            }
-
-            .calendar-day {
-                padding: 4px;
-                min-height: 60px;
-            }
-
-            .day-cost {
-                font-size: 10px;
-            }
-
-            .day-requests {
-                font-size: 8px;
             }
 
             .filter-buttons {
