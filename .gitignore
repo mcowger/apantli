@@ -12,3 +12,4 @@ config.jsonc
 .pytest_cache
 requests.db-wal
 requests.db-shm
+requests.db
