@@ -24,7 +24,7 @@ from apantli.database import Database
 from apantli.config import Config
 from apantli.pricing import CatwalkPricingService
 from apantli.errors import build_error_response
-from apantli.stats import stats, stats_daily, stats_date_range, stats_hourly, requests, clear_errors
+from apantli.stats import stats, stats_daily, stats_date_range, stats_hourly, requests, clear_errors, request_details
 from apantli.ui import dashboard, compare_page
 from apantli.incoming import chat_completions, embeddings, health, v1_models_openrouter, v1_model_info
 
@@ -174,6 +174,10 @@ async def _(request: Request):
 @app.get("/requests")
 async def _(request: Request, hours: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, timezone_offset: Optional[int] = None, offset: int = 0, limit: int = 50, provider: Optional[str] = None, model: Optional[str] = None, min_cost: Optional[float] = None, max_cost: Optional[float] = None, search: Optional[str] = None):
     return await requests(request, hours, start_date, end_date, timezone_offset, offset, limit, provider, model, min_cost, max_cost, search)
+
+@app.get("/requests/{timestamp}/details")
+async def _(request: Request, timestamp: str):
+    return await request_details(request, timestamp)
 
 @app.post("/v1/chat/completions")
 @app.post("/chat/completions")

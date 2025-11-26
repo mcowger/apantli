@@ -235,6 +235,32 @@ class Database:
       error
     ))
 
+  async def get_request_details(self, timestamp: str):
+    """Get detailed data for a specific request by timestamp.
+    
+    Args:
+      timestamp: The timestamp of the specific request to retrieve
+      
+    Returns:
+      Dict with incoming_request_data, request_data, response_data, or None if not found
+    """
+    async with self._get_read_connection() as conn:
+      cursor = await conn.execute("""
+        SELECT incoming_request_data, request_data, response_data 
+        FROM requests 
+        WHERE timestamp = ?
+      """, (timestamp,))
+      row = await cursor.fetchone()
+      
+      if row is None:
+        return None
+        
+      return {
+        "incoming_request_data": row[0],
+        "request_data": row[1], 
+        "response_data": row[2]
+      }
+
   async def get_requests(self, filters: RequestFilter):
     """Get requests with filtering and pagination.
 
@@ -293,7 +319,7 @@ class Database:
       # Get paginated results
       cursor = await conn.execute(f"""
         SELECT timestamp, model, provider, prompt_tokens, completion_tokens, total_tokens,
-               cost, duration_ms, incoming_request_data, request_data, response_data
+               cost, duration_ms
         FROM requests
         WHERE error IS NULL {filter_clause}
         ORDER BY timestamp DESC
@@ -311,10 +337,7 @@ class Database:
             "completion_tokens": row[4],
             "total_tokens": row[5],
             "cost": row[6],
-            "duration_ms": row[7],
-            "incoming_request_data": row[8],
-            "request_data": row[9],
-            "response_data": row[10]
+            "duration_ms": row[7]
           }
           for row in rows
         ],

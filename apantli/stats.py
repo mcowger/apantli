@@ -1,7 +1,7 @@
 
 
 
-from fastapi import  Request
+from fastapi import Request
 from typing import Optional
 import datetime
 from datetime import datetime, timedelta
@@ -123,6 +123,17 @@ async def stats_date_range(request: Request):
     """Get the actual date range of data in the database."""
     db = request.app.state.db
     return await db.get_date_range()
+
+
+async def request_details(request: Request, timestamp: str):
+    """Get detailed data for a specific request by timestamp.
+    
+    Parameters:
+    - timestamp: The timestamp of the specific request to retrieve
+    """
+    # Use Database instance from app state
+    db = request.app.state.db
+    return await db.get_request_details(timestamp)
 
 
 async def requests(request: Request, hours: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None,
