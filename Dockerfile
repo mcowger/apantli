@@ -1,5 +1,5 @@
 # Multi-architecture build (arm64 and amd64):
-#   docker buildx build --platform linux/amd64 -t apantli:latest --push .
+#   docker buildx build --platform linux/amd64 -t apantli:dev --push .
 
 #
 # Single architecture build:
